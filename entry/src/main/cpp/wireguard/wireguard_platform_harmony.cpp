@@ -37,10 +37,9 @@ extern "C" void wireguard_random_bytes(void *bytes, size_t size)
 {
     if (!bytes || size == 0) return;
 
-    int fd = open("/dev/urandom", O_RDONLY);
+    int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
         PLAT_LOGE("Failed to open /dev/urandom: %{public}d", errno);
-        // 降级：使用当前时间作为伪随机种子
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
         uint8_t *ptr = (uint8_t *)bytes;
@@ -55,6 +54,10 @@ extern "C" void wireguard_random_bytes(void *bytes, size_t size)
         ssize_t ret = read(fd, (uint8_t *)bytes + total, size - total);
         if (ret > 0) {
             total += ret;
+        } else if (ret == 0) {
+            break;
+        } else if (errno == EINTR) {
+            continue;
         } else {
             break;
         }

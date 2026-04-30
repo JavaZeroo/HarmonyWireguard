@@ -30,10 +30,6 @@ interface VpnParamConfig {
   wgKeepalive: number;
 }
 
-interface VpnWantParams {
-  config: Object;
-}
-
 @Entry
 @Component
 struct Index {
@@ -69,14 +65,11 @@ struct Index {
           wgPresharedKey: config.presharedKey,
           wgKeepalive: config.persistentKeepalive
         };
-        const wantParams: VpnWantParams = {
-          config: JSON.stringify(paramConfig)
-        };
         const want: Want = {
           deviceId: '',
           bundleName: 'com.example.harmonywireguard',
           abilityName: 'WireGuardVpnAbility',
-          parameters: wantParams
+          parameters: { config: JSON.stringify(paramConfig) }
         };
         await vpnExtension.startVpnExtensionAbility(want);
         hilog.info(DOMAIN, TAG, 'VPN started for %{public}s', config.name);
