@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "WireGuard VPN Client"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "WireGuard VPN Client"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "WireGuard"
+    }
+  ]
+}
