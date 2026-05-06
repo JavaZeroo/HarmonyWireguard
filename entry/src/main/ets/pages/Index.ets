@@ -4,17 +4,12 @@ import { common, Want } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
 import { configManager } from '../service/ConfigManager';
 import type { WgConfig } from '../model/WgConfig';
+import { APP_CONSTANTS, COLORS, DEFAULT_CONFIG } from '../common/Constants';
 
-const DOMAIN = 0x0000;
 const TAG = 'IndexPage';
 
-interface VpnParamNetAddress {
-  address: string;
-  family: number;
-}
-
 interface VpnParamAddress {
-  address: VpnParamNetAddress;
+  address: { address: string; family: number };
   prefixLength: number;
 }
 
@@ -28,6 +23,55 @@ interface VpnParamConfig {
   wgPeerPublicKey: string;
   wgPresharedKey: string;
   wgKeepalive: number;
+}
+
+function parseAddress(address: string): VpnParamAddress {
+  const [ip, prefix] = address.split('/');
+  return {
+    address: { address: ip, family: 1 },
+    prefixLength: parseInt(prefix || '24')
+  };
+}
+
+function parseEndpoint(endpoint: string): { serverIp: string; serverPort: number } {
+  const [ip, port] = endpoint.split(':');
+  return {
+    serverIp: ip,
+    serverPort: parseInt(port || String(DEFAULT_CONFIG.PORT))
+  };
+}
+
+function buildVpnParamConfig(config: WgConfig): VpnParamConfig {
+  const { serverIp, serverPort } = parseEndpoint(config.endpoint);
+  
+  return {
+    addresses: [parseAddress(config.address)],
+    dnsAddresses: config.dns ? config.dns.split(',') : [DEFAULT_CONFIG.DNS],
+    mtu: config.mtu || DEFAULT_CONFIG.MTU,
+    serverIp,
+    serverPort,
+    wgPrivateKey: config.privateKey,
+    wgPeerPublicKey: config.peerPublicKey,
+    wgPresharedKey: config.presharedKey,
+    wgKeepalive: config.persistentKeepalive || DEFAULT_CONFIG.KEEPALIVE
+  };
+}
+
+function createWant(config: WgConfig): Want {
+  return {
+    deviceId: '',
+    bundleName: APP_CONSTANTS.BUNDLE_NAME,
+    abilityName: APP_CONSTANTS.VPN_ABILITY_NAME,
+    parameters: { config: JSON.stringify(buildVpnParamConfig(config)) }
+  };
+}
+
+function createStopWant(): Want {
+  return {
+    deviceId: '',
+    bundleName: APP_CONSTANTS.BUNDLE_NAME,
+    abilityName: APP_CONSTANTS.VPN_ABILITY_NAME
+  };
 }
 
 @Entry
@@ -50,46 +94,21 @@ struct Index {
     if (enable) {
       this.connectingId = config.id;
       try {
-        const addr: VpnParamAddress = {
-          address: { address: config.address.split('/')[0], family: 1 },
-          prefixLength: parseInt(config.address.split('/')[1] || '24')
-        };
-        const paramConfig: VpnParamConfig = {
-          addresses: [addr],
-          dnsAddresses: config.dns ? config.dns.split(',') : ['8.8.8.8'],
-          mtu: config.mtu || 1420,
-          serverIp: config.endpoint.split(':')[0],
-          serverPort: parseInt(config.endpoint.split(':')[1] || '51820'),
-          wgPrivateKey: config.privateKey,
-          wgPeerPublicKey: config.peerPublicKey,
-          wgPresharedKey: config.presharedKey,
-          wgKeepalive: config.persistentKeepalive
-        };
-        const want: Want = {
-          deviceId: '',
-          bundleName: 'com.example.harmonywireguard',
-          abilityName: 'WireGuardVpnAbility',
-          parameters: { config: JSON.stringify(paramConfig) }
-        };
+        const want = createWant(config);
         await vpnExtension.startVpnExtensionAbility(want);
-        hilog.info(DOMAIN, TAG, 'VPN started for %{public}s', config.name);
+        hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'VPN started for %{public}s', config.name);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        hilog.error(DOMAIN, TAG, 'Failed to start VPN: %{public}s', msg);
+        hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'Failed to start VPN: %{public}s', msg);
       }
       this.connectingId = '';
     } else {
       try {
-        const want: Want = {
-          deviceId: '',
-          bundleName: 'com.example.harmonywireguard',
-          abilityName: 'WireGuardVpnAbility'
-        };
-        await vpnExtension.stopVpnExtensionAbility(want);
-        hilog.info(DOMAIN, TAG, 'VPN stopped');
+        await vpnExtension.stopVpnExtensionAbility(createStopWant());
+        hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'VPN stopped');
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        hilog.error(DOMAIN, TAG, 'Failed to stop VPN: %{public}s', msg);
+        hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'Failed to stop VPN: %{public}s', msg);
       }
     }
   }
@@ -103,20 +122,20 @@ struct Index {
           .fontWeight(FontWeight.Bold)
         Text(config.endpoint)
           .fontSize(14)
-          .fontColor('#666')
+          .fontColor(COLORS.TEXT_PRIMARY)
       }
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
 
       Toggle({ type: ToggleType.Switch, isOn: false })
-        .selectedColor('#00AA00')
+        .selectedColor(COLORS.PRIMARY)
         .onChange((isOn: boolean) => {
           this.toggleVpn(config, isOn);
         })
     }
     .width('100%')
     .padding(16)
-    .backgroundColor('#fff')
+    .backgroundColor(COLORS.CARD)
     .borderRadius(8)
     .margin({ top: 8, bottom: 8 })
     .onClick(() => {
@@ -134,7 +153,7 @@ struct Index {
       if (this.configs.length === 0) {
         Text('暂无配置，请点击下方添加')
           .fontSize(16)
-          .fontColor('#999')
+          .fontColor(COLORS.SECONDARY)
           .margin({ top: 100 })
       } else {
         List() {
@@ -169,6 +188,6 @@ struct Index {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#f5f5f5')
+    .backgroundColor(COLORS.BACKGROUND)
   }
 }

@@ -1,21 +1,31 @@
 import { router } from '@kit.ArkUI';
 import { vpnExtension } from '@kit.NetworkKit';
-import { common, Want } from '@kit.AbilityKit';
+import { Want } from '@kit.AbilityKit';
+import { APP_CONSTANTS, COLORS } from '../common/Constants';
+
+const TAG = 'StatusPage';
+
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
 
 @Entry
 @Component
 struct StatusPage {
   @State status: string = '已连接';
-  @State rxBytes: string = '0 B';
-  @State txBytes: string = '0 B';
-  private context = getContext(this) as common.UIAbilityContext;
+  @State rxBytes: number = 0;
+  @State txBytes: number = 0;
 
   async disconnect(): Promise<void> {
     try {
       const want: Want = {
         deviceId: '',
-        bundleName: 'com.example.harmonywireguard',
-        abilityName: 'WireGuardVpnAbility'
+        bundleName: APP_CONSTANTS.BUNDLE_NAME,
+        abilityName: APP_CONSTANTS.VPN_ABILITY_NAME
       };
       await vpnExtension.stopVpnExtensionAbility(want);
       this.status = '已断开';
@@ -35,15 +45,15 @@ struct StatusPage {
         Text(this.status)
           .fontSize(32)
           .fontWeight(FontWeight.Bold)
-          .fontColor(this.status === '已连接' ? '#00AA00' : '#FF4444')
+          .fontColor(this.status === '已连接' ? COLORS.PRIMARY : COLORS.DANGER)
           .margin({ bottom: 24 })
 
         Row() {
           Column() {
             Text('接收')
               .fontSize(14)
-              .fontColor('#666')
-            Text(this.rxBytes)
+              .fontColor(COLORS.TEXT_PRIMARY)
+            Text(formatBytes(this.rxBytes))
               .fontSize(20)
               .fontWeight(FontWeight.Bold)
           }
@@ -52,8 +62,8 @@ struct StatusPage {
           Column() {
             Text('发送')
               .fontSize(14)
-              .fontColor('#666')
-            Text(this.txBytes)
+              .fontColor(COLORS.TEXT_PRIMARY)
+            Text(formatBytes(this.txBytes))
               .fontSize(20)
               .fontWeight(FontWeight.Bold)
           }
@@ -64,7 +74,7 @@ struct StatusPage {
       }
       .width('100%')
       .padding(24)
-      .backgroundColor('#fff')
+      .backgroundColor(COLORS.CARD)
       .borderRadius(12)
       .margin({ left: 16, right: 16 })
 
@@ -72,7 +82,7 @@ struct StatusPage {
         .width('90%')
         .height(50)
         .fontSize(18)
-        .backgroundColor('#FF4444')
+        .backgroundColor(COLORS.DANGER)
         .margin({ top: 32 })
         .onClick(() => this.disconnect())
 
@@ -80,12 +90,12 @@ struct StatusPage {
         .width('90%')
         .height(50)
         .fontSize(18)
-        .backgroundColor('#999')
+        .backgroundColor(COLORS.SECONDARY)
         .margin({ top: 16 })
         .onClick(() => router.back())
     }
     .width('100%')
     .height('100%')
-    .backgroundColor('#f5f5f5')
+    .backgroundColor(COLORS.BACKGROUND)
   }
 }
