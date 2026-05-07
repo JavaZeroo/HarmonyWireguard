@@ -1,6 +1,5 @@
 import { router } from '@kit.ArkUI';
-import { promptAction } from '@kit.ArkUI';
-import { SPACING, RADIUS, TYPOGRAPHY } from '../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
 import { SectionCard } from '../components/common/SectionCard';
 import { ConfigParser } from '../service/ConfigParser';
 
@@ -16,28 +15,34 @@ struct ImportConfigPage {
         params: { config: result.config }
       });
     } else {
-      ConfigParser.showParseError(result.error || $r('app.string.error_parse_config'));
+      const msg = ConfigParser.resolveErrorMessage(result.error || $r('app.string.error_parse_config'));
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: msg, duration: 3000 });
+      } catch {}
     }
   }
 
   private async importFromClipboard(): Promise<void> {
     this.isLoading = true;
-    // Clipboard API would be used here
-    promptAction.showToast({ message: 'Clipboard import not yet implemented', duration: 2000 });
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: getString($r('app.string.toast_clipboard_not_impl')), duration: 2000 });
+    } catch {}
     this.isLoading = false;
   }
 
   private async importFromFile(): Promise<void> {
     this.isLoading = true;
-    // File picker API would be used here
-    promptAction.showToast({ message: 'File import not yet implemented', duration: 2000 });
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: getString($r('app.string.toast_file_not_impl')), duration: 2000 });
+    } catch {}
     this.isLoading = false;
   }
 
   private async scanQRCode(): Promise<void> {
     this.isLoading = true;
-    // Camera/Scanner API would be used here
-    promptAction.showToast({ message: 'QR scan not yet implemented', duration: 2000 });
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: getString($r('app.string.toast_qr_not_impl')), duration: 2000 });
+    } catch {}
     this.isLoading = false;
   }
 
@@ -87,7 +92,7 @@ struct ImportConfigPage {
             router.back();
           })
 
-        Text(getContext().resourceManager.getStringSync($r('app.string.page_import_config').id))
+        Text(getString($r('app.string.page_import_config')))
           .fontSize(TYPOGRAPHY.title_sm.size)
           .fontWeight(TYPOGRAPHY.title_sm.weight)
           .fontColor($r('app.color.text_primary'))
@@ -107,7 +112,7 @@ struct ImportConfigPage {
             .width(48)
             .height(48)
             .color($r('app.color.primary'))
-          Text('Loading...')
+          Text(getString($r('app.string.label_loading')))
             .fontSize(TYPOGRAPHY.body_md.size)
             .fontColor($r('app.color.text_secondary'))
             .margin({ top: SPACING.md })
@@ -120,29 +125,29 @@ struct ImportConfigPage {
           Column({ space: SPACING.md }) {
             this.ImportOptionCard(
               $r('sys.symbol.camera'),
-              getContext().resourceManager.getStringSync($r('app.string.button_scan_qr').id),
-              '使用相机扫描 WireGuard 配置二维码',
+              getString($r('app.string.button_scan_qr')),
+              getString($r('app.string.desc_scan_qr')),
               () => this.scanQRCode()
             )
 
             this.ImportOptionCard(
               $r('sys.symbol.folder'),
-              getContext().resourceManager.getStringSync($r('app.string.button_import_file').id),
-              '选择 .conf 配置文件',
+              getString($r('app.string.button_import_file')),
+              getString($r('app.string.desc_import_file')),
               () => this.importFromFile()
             )
 
             this.ImportOptionCard(
               $r('sys.symbol.doc_text'),
-              getContext().resourceManager.getStringSync($r('app.string.button_import_clipboard').id),
-              '粘贴 WireGuard 配置文本',
+              getString($r('app.string.button_import_clipboard')),
+              getString($r('app.string.desc_import_clipboard')),
               () => this.importFromClipboard()
             )
 
             this.ImportOptionCard(
               $r('sys.symbol.doc'),
-              getContext().resourceManager.getStringSync($r('app.string.button_create_manual').id),
-              '自行填写 Interface/Peer',
+              getString($r('app.string.button_create_manual')),
+              getString($r('app.string.desc_create_manual')),
               () => {
                 router.pushUrl({ url: 'pages/ConfigEditPage' });
               }

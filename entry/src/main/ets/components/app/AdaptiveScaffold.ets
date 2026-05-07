@@ -1,5 +1,5 @@
 import { Breakpoint, getBreakpoint, SPACING } from '../../common/DesignSystem';
-import display from '@ohos.display';
+import { display } from '@kit.ArkUI';
 
 @Component
 export struct AdaptiveScaffold {
@@ -44,7 +44,7 @@ export struct AdaptiveScaffold {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
-    .onAreaChange((oldArea, newArea) => {
+    .onAreaChange((_oldArea, newArea) => {
       if (newArea.width > 0) {
         this.windowWidth = px2vp(newArea.width as number);
         this.breakpoint = getBreakpoint(this.windowWidth);

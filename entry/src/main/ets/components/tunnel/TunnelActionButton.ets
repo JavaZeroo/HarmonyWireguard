@@ -1,4 +1,4 @@
-import { RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
+import { RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 import type { TunnelStatusType } from '../../model/WgConfig';
 
 @Component
@@ -8,16 +8,15 @@ export struct TunnelActionButton {
   onPrimaryAction?: () => void;
 
   private getButtonText(): string {
-    const rm = getContext().resourceManager;
     switch (this.status) {
       case 'connected':
-        return rm.getStringSync($r('app.string.button_disconnect').id);
+        return getString($r('app.string.button_disconnect'));
       case 'connecting':
-        return rm.getStringSync($r('app.string.button_cancel').id);
+        return getString($r('app.string.button_cancel'));
       case 'failed':
-        return rm.getStringSync($r('app.string.button_retry').id);
+        return getString($r('app.string.button_retry'));
       default:
-        return rm.getStringSync($r('app.string.button_connect').id);
+        return getString($r('app.string.button_connect'));
     }
   }
 

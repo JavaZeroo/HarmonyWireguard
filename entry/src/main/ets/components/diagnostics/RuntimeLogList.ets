@@ -1,4 +1,4 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
+import { SPACING, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 import type { RuntimeLogEntry } from '../../model/WgConfig';
 
 @Component
@@ -24,7 +24,7 @@ export struct RuntimeLogList {
 
   build() {
     Column({ space: SPACING.xs }) {
-      Text(getContext().resourceManager.getStringSync($r('app.string.section_logs').id))
+      Text(getString($r('app.string.section_logs')))
         .fontSize(TYPOGRAPHY.title_sm.size)
         .fontWeight(TYPOGRAPHY.title_sm.weight)
         .fontColor($r('app.color.text_primary'))
@@ -32,7 +32,7 @@ export struct RuntimeLogList {
         .margin({ bottom: SPACING.xs })
 
       if (this.logs.length === 0) {
-        Text('暂无日志')
+        Text(getString($r('app.string.hint_waiting_data')))
           .fontSize(TYPOGRAPHY.caption.size)
           .fontColor($r('app.color.text_tertiary'))
           .width('100%')

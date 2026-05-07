@@ -1,4 +1,4 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 import { deriveRouteMode, formatEndpointShort } from '../../common/Utils';
 import type { WgConfig } from '../../model/WgConfig';
 import type { TunnelStatusType } from '../../model/WgConfig';
@@ -16,14 +16,13 @@ export struct TunnelListItem {
 
   private getRouteLabel(): string {
     const mode = deriveRouteMode(this.config.allowedIPs);
-    const rm = getContext().resourceManager;
     switch (mode) {
       case 'global':
-        return rm.getStringSync($r('app.string.route_global').id);
+        return getString($r('app.string.route_global'));
       case 'lanOnly':
-        return rm.getStringSync($r('app.string.route_lan_only').id);
+        return getString($r('app.string.route_lan_only'));
       default:
-        return rm.getStringSync($r('app.string.route_custom').id);
+        return getString($r('app.string.route_custom'));
     }
   }
 

@@ -1,5 +1,4 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
-import { promptAction } from '@kit.ArkUI';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 
 @Component
 export struct ExportReportButton {
@@ -7,7 +6,9 @@ export struct ExportReportButton {
 
   private handleExport(): void {
     this.onExport?.();
-    promptAction.showToast({ message: '诊断报告已导出（脱敏）', duration: 2000 });
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: getString($r('app.string.toast_report_exported')), duration: 2000 });
+    } catch {}
   }
 
   build() {
@@ -18,7 +19,7 @@ export struct ExportReportButton {
           .fontColor(['#FFFFFF'])
           .margin({ right: SPACING.xs })
 
-        Text(getContext().resourceManager.getStringSync($r('app.string.button_export_report').id))
+        Text(getString($r('app.string.button_export_report')))
           .fontSize(TYPOGRAPHY.body_md.size)
           .fontColor('#FFFFFF')
       }

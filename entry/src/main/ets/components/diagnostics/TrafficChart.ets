@@ -1,4 +1,4 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 import { formatSpeed } from '../../common/Formatters';
 
 interface TrafficPoint {
@@ -33,7 +33,7 @@ export struct TrafficChart {
     Column() {
       Row() {
         Column() {
-          Text('�?' + formatSpeed(this.rxSpeed))
+          Text('\u2193 ' + formatSpeed(this.rxSpeed))
             .fontSize(TYPOGRAPHY.body_lg.size)
             .fontWeight(FontWeight.Bold)
             .fontColor($r('app.color.primary'))
@@ -41,7 +41,7 @@ export struct TrafficChart {
         .layoutWeight(1)
 
         Column() {
-          Text('�?' + formatSpeed(this.txSpeed))
+          Text('\u2191 ' + formatSpeed(this.txSpeed))
             .fontSize(TYPOGRAPHY.body_lg.size)
             .fontWeight(FontWeight.Bold)
             .fontColor($r('app.color.success'))
@@ -78,7 +78,7 @@ export struct TrafficChart {
         .padding({ left: 4, right: 4 })
 
         if (this.history.length === 0) {
-          Text('等待数据...')
+          Text(getString($r('app.string.hint_waiting_data')))
             .fontSize(TYPOGRAPHY.caption.size)
             .fontColor($r('app.color.text_tertiary'))
         }

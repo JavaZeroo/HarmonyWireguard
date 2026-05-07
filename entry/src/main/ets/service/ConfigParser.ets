@@ -1,43 +1,42 @@
 import type { WgConfig } from '../model/WgConfig';
 import { parseWireGuardConfig, buildWgConfigFromParsed } from '../common/Utils';
 import { validateBase64Key, validateEndpoint } from '../common/Validators';
-import { promptAction } from '@kit.ArkUI';
 
 export interface ParseResult {
   success: boolean;
   config?: WgConfig;
-  error?: string;
+  error?: string | Resource;
 }
 
 export class ConfigParser {
   static parseFromText(text: string, name?: string): ParseResult {
     const parsed = parseWireGuardConfig(text);
     if (!parsed) {
-      return { success: false, error: '未识别到有效的 WireGuard 配置' };
+      return { success: false, error: $r('app.string.error_parse_config') };
     }
 
     if (!parsed.privateKey || parsed.privateKey.length === 0) {
-      return { success: false, error: '配置缺少本机私钥' };
+      return { success: false, error: $r('app.string.error_missing_private_key') };
     }
 
     if (!validateBase64Key(parsed.privateKey)) {
-      return { success: false, error: '密钥格式不正确' };
+      return { success: false, error: $r('app.string.error_invalid_key') };
     }
 
     if (!parsed.peerPublicKey || parsed.peerPublicKey.length === 0) {
-      return { success: false, error: '配置缺少服务器公钥' };
+      return { success: false, error: $r('app.string.error_missing_public_key') };
     }
 
     if (!validateBase64Key(parsed.peerPublicKey)) {
-      return { success: false, error: '密钥格式不正确' };
+      return { success: false, error: $r('app.string.error_invalid_key') };
     }
 
     if (!validateEndpoint(parsed.endpoint)) {
-      return { success: false, error: '服务器地址或端口格式不正确' };
+      return { success: false, error: $r('app.string.error_invalid_endpoint') };
     }
 
     if (!parsed.allowedIPs || parsed.allowedIPs.trim().length === 0) {
-      return { success: false, error: '未配置路由范围，连接后可能无法访问目标网络' };
+      return { success: false, error: $r('app.string.error_empty_allowed_ips') };
     }
 
     if (name && name.length > 0) {
@@ -50,17 +49,18 @@ export class ConfigParser {
 
   static parseFromClipboard(): Promise<ParseResult> {
     return new Promise((resolve) => {
-      resolve({ success: false, error: 'Clipboard access not implemented' });
+      resolve({ success: false, error: $r('app.string.toast_clipboard_not_impl') });
     });
   }
 
-  static showParseError(message: string | Resource): void {
-    let msg: string;
+  static resolveErrorMessage(message: string | Resource): string {
     if (typeof message === 'string') {
-      msg = message;
-    } else {
-      msg = getContext().resourceManager.getStringSync(message.id);
+      return message;
     }
-    promptAction.showToast({ message: msg, duration: 3000 });
+    try {
+      return getContext().resourceManager.getStringSync(message.id);
+    } catch {
+      return 'Unknown error';
+    }
   }
 }

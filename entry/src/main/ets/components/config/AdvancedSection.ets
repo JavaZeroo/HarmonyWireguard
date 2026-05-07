@@ -1,4 +1,4 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 
 @Component
 export struct AdvancedSection {
@@ -33,17 +33,17 @@ export struct AdvancedSection {
 
   build() {
     Column({ space: SPACING.sm }) {
-      Text(getContext().resourceManager.getStringSync($r('app.string.section_advanced').id))
+      Text(getString($r('app.string.section_advanced')))
         .fontSize(TYPOGRAPHY.label.size)
         .fontWeight(TYPOGRAPHY.label.weight)
         .fontColor($r('app.color.text_primary'))
         .margin({ bottom: SPACING.xs })
         .width('100%')
 
-      this.SwitchRow('自动连接', this.autoConnect, (val) => this.onAutoConnectChange?.(val))
-      this.SwitchRow('网络变化后重连', this.reconnectOnNetworkChange, (val) => this.onReconnectChange?.(val))
-      this.SwitchRow('IPv6 防泄露', this.blockIpv6Leak, (val) => this.onBlockIpv6Change?.(val))
-      this.SwitchRow('允许访问本地网络', this.allowLanAccess, (val) => this.onAllowLanChange?.(val))
+      this.SwitchRow(getString($r('app.string.option_auto_connect')), this.autoConnect, (val) => this.onAutoConnectChange?.(val))
+      this.SwitchRow(getString($r('app.string.option_reconnect')), this.reconnectOnNetworkChange, (val) => this.onReconnectChange?.(val))
+      this.SwitchRow(getString($r('app.string.option_block_ipv6')), this.blockIpv6Leak, (val) => this.onBlockIpv6Change?.(val))
+      this.SwitchRow(getString($r('app.string.option_allow_lan')), this.allowLanAccess, (val) => this.onAllowLanChange?.(val))
     }
     .width('100%')
     .margin({ bottom: SPACING.md })

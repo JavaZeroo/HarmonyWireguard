@@ -1,6 +1,5 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 import { parseEndpoint } from '../../common/Utils';
-import { validatePort } from '../../common/Validators';
 
 @Component
 export struct EndpointInput {
@@ -43,7 +42,7 @@ export struct EndpointInput {
 
   build() {
     Column() {
-      Text(getContext().resourceManager.getStringSync($r('app.string.field_endpoint').id))
+      Text(getString($r('app.string.field_endpoint')))
         .fontSize(TYPOGRAPHY.label.size)
         .fontWeight(TYPOGRAPHY.label.weight)
         .fontColor($r('app.color.text_primary'))
@@ -51,7 +50,7 @@ export struct EndpointInput {
         .width('100%')
 
       Row({ space: SPACING.sm }) {
-        TextInput({ placeholder: 'vpn.example.com', text: this.host })
+        TextInput({ placeholder: getString($r('app.string.placeholder_endpoint_host')), text: this.host })
           .fontSize(TYPOGRAPHY.body_md.size)
           .layoutWeight(3)
           .height(44)
@@ -63,7 +62,7 @@ export struct EndpointInput {
             this.updateEndpoint();
           })
 
-        TextInput({ placeholder: '51820', text: this.port })
+        TextInput({ placeholder: getString($r('app.string.placeholder_endpoint_port')), text: this.port })
           .fontSize(TYPOGRAPHY.body_md.size)
           .layoutWeight(1)
           .height(44)

@@ -14,10 +14,25 @@ export struct EmptyState {
     Column() {}
   }
 
+  private getIconResource(): Resource {
+    // Map common icon names to safe sys.symbol names
+    switch (this.icon) {
+      case 'wifi_slash':
+      case 'wifi':
+        return $r('sys.symbol.wifi');
+      case 'doc':
+        return $r('sys.symbol.doc');
+      case 'camera':
+        return $r('sys.symbol.camera');
+      default:
+        return $r('sys.symbol.wifi');
+    }
+  }
+
   build() {
     Column() {
-      if (this.icon) {
-        SymbolGlyph($r('sys.symbol.wifi_slash'))
+      if (this.icon.length > 0) {
+        SymbolGlyph(this.getIconResource())
           .fontSize(64)
           .fontColor([$r('app.color.text_tertiary')])
           .margin({ bottom: SPACING.lg })

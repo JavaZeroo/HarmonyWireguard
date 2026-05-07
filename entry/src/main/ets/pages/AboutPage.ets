@@ -1,5 +1,5 @@
 import { router } from '@kit.ArkUI';
-import { SPACING, RADIUS, TYPOGRAPHY } from '../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
 import { SectionCard } from '../components/common/SectionCard';
 
 @Entry
@@ -16,7 +16,7 @@ struct AboutPage {
             router.back();
           })
 
-        Text(getContext().resourceManager.getStringSync($r('app.string.page_about').id))
+        Text(getString($r('app.string.page_about')))
           .fontSize(TYPOGRAPHY.title_sm.size)
           .fontWeight(TYPOGRAPHY.title_sm.weight)
           .fontColor($r('app.color.text_primary'))
@@ -39,13 +39,13 @@ struct AboutPage {
               .fontColor([$r('app.color.primary')])
               .margin({ bottom: SPACING.md })
 
-            Text(getContext().resourceManager.getStringSync($r('app.string.app_name').id))
+            Text(getString($r('app.string.app_name')))
               .fontSize(TYPOGRAPHY.title_md.size)
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))
               .margin({ bottom: SPACING.xs })
 
-            Text('Version 1.0.0')
+            Text(getString($r('app.string.app_version')))
               .fontSize(TYPOGRAPHY.body_sm.size)
               .fontColor($r('app.color.text_secondary'))
           }
@@ -56,20 +56,20 @@ struct AboutPage {
           .alignItems(HorizontalAlign.Center)
 
           // Open Source
-          SectionCard({ title: '开源协议' }) {
+          SectionCard({ title: getString($r('app.string.label_open_source')) }) {
             Column() {
-              Text('本应用使用了以下开源项目：')
+              Text(getString($r('app.string.open_source_desc')))
                 .fontSize(TYPOGRAPHY.body_sm.size)
                 .fontColor($r('app.color.text_primary'))
                 .width('100%')
                 .margin({ bottom: SPACING.sm })
 
-              Text('- WireGuard (GPLv2)')
+              Text(getString($r('app.string.open_source_wireguard')))
                 .fontSize(TYPOGRAPHY.body_sm.size)
                 .fontColor($r('app.color.text_secondary'))
                 .width('100%')
 
-              Text('- HarmonyOS ArkUI')
+              Text(getString($r('app.string.open_source_arkui')))
                 .fontSize(TYPOGRAPHY.body_sm.size)
                 .fontColor($r('app.color.text_secondary'))
                 .width('100%')
@@ -78,9 +78,9 @@ struct AboutPage {
           }
 
           // Privacy
-          SectionCard({ title: '隐私说明' }) {
+          SectionCard({ title: getString($r('app.string.label_privacy')) }) {
             Column() {
-              Text('本应用仅在本地处理 WireGuard 配置信息，不会将您的私钥或配置上传到任何服务器。所有敏感数据均存储在设备本地。')
+              Text(getString($r('app.string.privacy_desc')))
                 .fontSize(TYPOGRAPHY.body_sm.size)
                 .fontColor($r('app.color.text_secondary'))
                 .width('100%')
@@ -89,9 +89,9 @@ struct AboutPage {
           }
 
           // Developer
-          SectionCard({ title: '开发者' }) {
+          SectionCard({ title: getString($r('app.string.label_developer')) }) {
             Column() {
-              Text('HarmonyWireguard Project')
+              Text(getString($r('app.string.developer_name')))
                 .fontSize(TYPOGRAPHY.body_sm.size)
                 .fontColor($r('app.color.text_secondary'))
                 .width('100%')

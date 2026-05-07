@@ -1,4 +1,4 @@
-import { RADIUS, SPACING } from '../../common/DesignSystem';
+import { RADIUS, SPACING, getString } from '../../common/DesignSystem';
 import type { TunnelStatusType } from '../../model/WgConfig';
 
 @Component
@@ -8,13 +8,13 @@ export struct StatusBadge {
   private getStatusText(): string {
     switch (this.status) {
       case 'connected':
-        return getContext().resourceManager.getStringSync($r('app.string.status_connected').id);
+        return getString($r('app.string.status_connected'));
       case 'connecting':
-        return getContext().resourceManager.getStringSync($r('app.string.status_connecting').id);
+        return getString($r('app.string.status_connecting'));
       case 'failed':
-        return getContext().resourceManager.getStringSync($r('app.string.status_failed').id);
+        return getString($r('app.string.status_failed'));
       default:
-        return getContext().resourceManager.getStringSync($r('app.string.status_disconnected').id);
+        return getString($r('app.string.status_disconnected'));
     }
   }
 

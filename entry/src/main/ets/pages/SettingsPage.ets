@@ -1,5 +1,5 @@
 import { router } from '@kit.ArkUI';
-import { SPACING, RADIUS, TYPOGRAPHY } from '../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
 import { SectionCard } from '../components/common/SectionCard';
 
 @Entry
@@ -64,7 +64,7 @@ struct SettingsPage {
             router.back();
           })
 
-        Text(getContext().resourceManager.getStringSync($r('app.string.page_settings').id))
+        Text(getString($r('app.string.page_settings')))
           .fontSize(TYPOGRAPHY.title_sm.size)
           .fontWeight(TYPOGRAPHY.title_sm.weight)
           .fontColor($r('app.color.text_primary'))
@@ -81,57 +81,57 @@ struct SettingsPage {
       Scroll() {
         Column({ space: SPACING.md }) {
           // Connection Behavior
-          SectionCard({ title: '连接行为' }) {
+          SectionCard({ title: getString($r('app.string.section_connection_behavior')) }) {
             Column({ space: SPACING.xs }) {
-              this.SwitchRow('启动时自动连接', this.autoConnect, (v) => this.autoConnect = v)
-              this.SwitchRow('网络变化后自动重连', this.reconnectOnNetworkChange, (v) => this.reconnectOnNetworkChange = v)
-              this.SwitchRow('连接失败自动重试', this.retryOnFailure, (v) => this.retryOnFailure = v)
+              this.SwitchRow(getString($r('app.string.option_auto_connect')), this.autoConnect, (v) => this.autoConnect = v)
+              this.SwitchRow(getString($r('app.string.option_reconnect')), this.reconnectOnNetworkChange, (v) => this.reconnectOnNetworkChange = v)
+              this.SwitchRow(getString($r('app.string.option_retry_failure')), this.retryOnFailure, (v) => this.retryOnFailure = v)
             }
             .width('100%')
           }
 
           // Routing & Network
-          SectionCard({ title: '路由与网络' }) {
+          SectionCard({ title: getString($r('app.string.section_routing_network')) }) {
             Column({ space: SPACING.xs }) {
-              this.SwitchRow('允许访问本地网络', this.allowLanAccess, (v) => this.allowLanAccess = v)
-              this.SwitchRow('IPv6 防泄露', this.blockIpv6Leak, (v) => this.blockIpv6Leak = v)
-              this.SwitchRow('默认 MTU 自动', this.defaultMtuAuto, (v) => this.defaultMtuAuto = v)
-              this.SwitchRow('DNS 泄漏检测', this.dnsLeakDetection, (v) => this.dnsLeakDetection = v)
+              this.SwitchRow(getString($r('app.string.option_allow_lan')), this.allowLanAccess, (v) => this.allowLanAccess = v)
+              this.SwitchRow(getString($r('app.string.option_block_ipv6')), this.blockIpv6Leak, (v) => this.blockIpv6Leak = v)
+              this.SwitchRow(getString($r('app.string.option_mtu_auto')), this.defaultMtuAuto, (v) => this.defaultMtuAuto = v)
+              this.SwitchRow(getString($r('app.string.option_dns_leak')), this.dnsLeakDetection, (v) => this.dnsLeakDetection = v)
             }
             .width('100%')
           }
 
           // Privacy & Security
-          SectionCard({ title: '隐私与安全' }) {
+          SectionCard({ title: getString($r('app.string.section_privacy_security')) }) {
             Column({ space: SPACING.xs }) {
-              this.SwitchRow('私钥显示二次确认', this.keyRevealConfirm, (v) => this.keyRevealConfirm = v)
-              this.SwitchRow('导出配置二次确认', this.exportConfirm, (v) => this.exportConfirm = v)
-              this.SwitchRow('自动清除剪贴板', this.autoClearClipboard, (v) => this.autoClearClipboard = v)
-              this.SwitchRow('日志脱敏', this.logSanitization, (v) => this.logSanitization = v)
+              this.SwitchRow(getString($r('app.string.option_key_reveal_confirm')), this.keyRevealConfirm, (v) => this.keyRevealConfirm = v)
+              this.SwitchRow(getString($r('app.string.option_export_confirm')), this.exportConfirm, (v) => this.exportConfirm = v)
+              this.SwitchRow(getString($r('app.string.option_auto_clear_clipboard')), this.autoClearClipboard, (v) => this.autoClearClipboard = v)
+              this.SwitchRow(getString($r('app.string.option_log_sanitization')), this.logSanitization, (v) => this.logSanitization = v)
             }
             .width('100%')
           }
 
           // Appearance
-          SectionCard({ title: '外观' }) {
+          SectionCard({ title: getString($r('app.string.section_appearance')) }) {
             Column({ space: SPACING.xs }) {
-              this.SwitchRow('跟随系统深色模式', this.followSystemDark, (v) => this.followSystemDark = v)
-              this.SwitchRow('紧凑模式', this.compactMode, (v) => this.compactMode = v)
-              this.SwitchRow('状态栏显示流量', this.statusBarTraffic, (v) => this.statusBarTraffic = v)
+              this.SwitchRow(getString($r('app.string.option_follow_dark')), this.followSystemDark, (v) => this.followSystemDark = v)
+              this.SwitchRow(getString($r('app.string.option_compact_mode')), this.compactMode, (v) => this.compactMode = v)
+              this.SwitchRow(getString($r('app.string.option_status_bar_traffic')), this.statusBarTraffic, (v) => this.statusBarTraffic = v)
             }
             .width('100%')
           }
 
           // About
-          SectionCard({ title: '关于' }) {
+          SectionCard({ title: getString($r('app.string.page_about')) }) {
             Column({ space: SPACING.xs }) {
-              this.NavigationRow('版本信息', () => {
+              this.NavigationRow(getString($r('app.string.label_version_info')), () => {
                 router.pushUrl({ url: 'pages/AboutPage' });
               })
-              this.NavigationRow('开源协议', () => {
+              this.NavigationRow(getString($r('app.string.label_open_source')), () => {
                 router.pushUrl({ url: 'pages/AboutPage' });
               })
-              this.NavigationRow('隐私说明', () => {
+              this.NavigationRow(getString($r('app.string.label_privacy')), () => {
                 router.pushUrl({ url: 'pages/AboutPage' });
               })
             }

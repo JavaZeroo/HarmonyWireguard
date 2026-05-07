@@ -1,5 +1,5 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
-import { formatBytes, formatHandshake } from '../../common/Formatters';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
+import { formatBytes } from '../../common/Formatters';
 import type { TunnelStatusType } from '../../model/WgConfig';
 import { TunnelActionButton } from './TunnelActionButton';
 
@@ -30,16 +30,15 @@ export struct ConnectionHeroCard {
   }
 
   private getStatusText(): string {
-    const rm = getContext().resourceManager;
     switch (this.status) {
       case 'connected':
-        return rm.getStringSync($r('app.string.status_connected').id);
+        return getString($r('app.string.status_connected'));
       case 'connecting':
-        return rm.getStringSync($r('app.string.status_connecting').id);
+        return getString($r('app.string.status_connecting'));
       case 'failed':
-        return rm.getStringSync($r('app.string.status_failed').id);
+        return getString($r('app.string.status_failed'));
       default:
-        return rm.getStringSync($r('app.string.status_disconnected').id);
+        return getString($r('app.string.status_disconnected'));
     }
   }
 
@@ -58,11 +57,14 @@ export struct ConnectionHeroCard {
 
   private getHandshakeText(): string {
     if (this.lastHandshakeAt === undefined || this.lastHandshakeAt < 0) {
-      return getContext().resourceManager.getStringSync($r('app.string.hint_handshake_never').id);
+      return getString($r('app.string.hint_handshake_never'));
     }
     const now = Math.floor(Date.now() / 1000);
     const ago = now - this.lastHandshakeAt;
-    return formatHandshake(ago);
+    if (ago < 60) {
+      return getString($r('app.string.hint_handshake_ago')).replace('%s', String(ago));
+    }
+    return getString($r('app.string.hint_handshake_min_ago')).replace('%s', String(Math.floor(ago / 60)));
   }
 
   build() {
@@ -70,7 +72,7 @@ export struct ConnectionHeroCard {
       // Header: name + status
       Row() {
         Column() {
-          Text(this.tunnelName || getContext().resourceManager.getStringSync($r('app.string.section_current_connection').id))
+          Text(this.tunnelName || getString($r('app.string.section_current_connection')))
             .fontSize(TYPOGRAPHY.title_sm.size)
             .fontWeight(TYPOGRAPHY.title_sm.weight)
             .fontColor($r('app.color.text_primary'))
@@ -122,7 +124,7 @@ export struct ConnectionHeroCard {
       if (this.status === 'connected' || this.rxBytes > 0 || this.txBytes > 0) {
         Row() {
           Column() {
-            Text(getContext().resourceManager.getStringSync($r('app.string.traffic_rx').id))
+            Text(getString($r('app.string.traffic_rx')))
               .fontSize(TYPOGRAPHY.caption.size)
               .fontColor($r('app.color.text_secondary'))
             Text(formatBytes(this.rxBytes))
@@ -134,7 +136,7 @@ export struct ConnectionHeroCard {
           .alignItems(HorizontalAlign.Start)
 
           Column() {
-            Text(getContext().resourceManager.getStringSync($r('app.string.traffic_tx').id))
+            Text(getString($r('app.string.traffic_tx')))
               .fontSize(TYPOGRAPHY.caption.size)
               .fontColor($r('app.color.text_secondary'))
             Text(formatBytes(this.txBytes))
@@ -166,7 +168,7 @@ export struct ConnectionHeroCard {
         })
 
         if (this.status !== 'disconnected') {
-          Button(getContext().resourceManager.getStringSync($r('app.string.button_detail').id))
+          Button(getString($r('app.string.button_detail')))
             .fontSize(TYPOGRAPHY.body_md.size)
             .fontColor($r('app.color.primary'))
             .backgroundColor('transparent')

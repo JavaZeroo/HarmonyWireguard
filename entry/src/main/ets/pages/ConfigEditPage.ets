@@ -1,9 +1,8 @@
 import { router } from '@kit.ArkUI';
-import { promptAction } from '@kit.ArkUI';
 import { configManager } from '../service/ConfigManager';
 import type { WgConfig } from '../model/WgConfig';
 import { DEFAULT_CONFIG } from '../common/Constants';
-import { SPACING, RADIUS, TYPOGRAPHY } from '../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
 import { SectionCard } from '../components/common/SectionCard';
 import { SecureKeyField } from '../components/config/SecureKeyField';
 import { KeyField } from '../components/config/KeyField';
@@ -69,44 +68,46 @@ struct ConfigEditPage {
     const errs: FormErrors = {};
 
     if (!this.config.name || this.config.name.trim().length === 0) {
-      errs.name = getContext().resourceManager.getStringSync($r('app.string.error_required').id);
+      errs.name = getString($r('app.string.error_required'));
     }
 
     if (!this.config.privateKey || !validateBase64Key(this.config.privateKey)) {
-      errs.privateKey = getContext().resourceManager.getStringSync($r('app.string.error_invalid_key').id);
+      errs.privateKey = getString($r('app.string.error_invalid_key'));
     }
 
     if (!this.config.address || !validateCidr(this.config.address)) {
-      errs.address = getContext().resourceManager.getStringSync($r('app.string.error_invalid_cidr').id);
+      errs.address = getString($r('app.string.error_invalid_cidr'));
     }
 
     if (this.config.dns && !validateDns(this.config.dns)) {
-      errs.dns = getContext().resourceManager.getStringSync($r('app.string.error_invalid_dns').id);
+      errs.dns = getString($r('app.string.error_invalid_dns'));
     }
 
     if (this.config.mtu !== 0 && !validateMtu(this.config.mtu)) {
-      errs.mtu = getContext().resourceManager.getStringSync($r('app.string.error_invalid_mtu').id);
+      errs.mtu = getString($r('app.string.error_invalid_mtu'));
     }
 
     if (!this.config.peerPublicKey || !validateBase64Key(this.config.peerPublicKey)) {
-      errs.peerPublicKey = getContext().resourceManager.getStringSync($r('app.string.error_invalid_key').id);
+      errs.peerPublicKey = getString($r('app.string.error_invalid_key'));
     }
 
     if (!this.config.endpoint || !validateEndpoint(this.config.endpoint)) {
-      errs.endpoint = getContext().resourceManager.getStringSync($r('app.string.error_invalid_endpoint').id);
+      errs.endpoint = getString($r('app.string.error_invalid_endpoint'));
     }
 
     if (!this.config.allowedIPs || this.config.allowedIPs.trim().length === 0) {
-      errs.allowedIPs = getContext().resourceManager.getStringSync($r('app.string.error_empty_allowed_ips').id);
+      errs.allowedIPs = getString($r('app.string.error_empty_allowed_ips'));
     }
 
     this.errors = errs;
-    return errs.name === undefined && errs.privateKey === undefined && errs.address === undefined && errs.dns === undefined && errs.mtu === undefined && errs.peerPublicKey === undefined && errs.endpoint === undefined && errs.allowedIPs === undefined;
+    return Object.keys(errs).length === 0;
   }
 
   saveConfig(): void {
     if (!this.validate()) {
-      promptAction.showToast({ message: '请修正表单错误', duration: 2000 });
+      try {
+        this.getUIContext().getPromptAction().showToast({ message: getString($r('app.string.error_fix_form')), duration: 2000 });
+      } catch {}
       return;
     }
 
@@ -127,9 +128,9 @@ struct ConfigEditPage {
   private showDeleteDialog(): void {
     this.deleteDialogController = new CustomDialogController({
       builder: SecureConfirmDialog({
-        title: getContext().resourceManager.getStringSync($r('app.string.dialog_delete_config_title').id),
-        message: getContext().resourceManager.getStringSync($r('app.string.dialog_delete_config_message').id),
-        confirmText: getContext().resourceManager.getStringSync($r('app.string.button_delete').id),
+        title: getString($r('app.string.dialog_delete_config_title')),
+        message: getString($r('app.string.dialog_delete_config_message')),
+        confirmText: getString($r('app.string.button_delete')),
         onConfirm: () => {
           this.deleteConfig();
         }
@@ -215,14 +216,14 @@ struct ConfigEditPage {
             router.back();
           })
 
-        Text(this.config.id ? getContext().resourceManager.getStringSync($r('app.string.page_config_edit').id) : '新建配置')
+        Text(this.config.id ? getString($r('app.string.page_config_edit')) : getString($r('app.string.page_config_new')))
           .fontSize(TYPOGRAPHY.title_sm.size)
           .fontWeight(TYPOGRAPHY.title_sm.weight)
           .fontColor($r('app.color.text_primary'))
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
 
-        Text(getContext().resourceManager.getStringSync($r('app.string.button_save').id))
+        Text(getString($r('app.string.button_save')))
           .fontSize(TYPOGRAPHY.body_md.size)
           .fontColor($r('app.color.primary'))
           .onClick(() => {
@@ -236,12 +237,12 @@ struct ConfigEditPage {
 
       Scroll() {
         Column({ space: SPACING.md }) {
-          SectionCard({ title: getContext().resourceManager.getStringSync($r('app.string.section_display').id) }) {
+          SectionCard({ title: getString($r('app.string.section_display')) }) {
             Column() {
               this.FormInputOptional(
-                getContext().resourceManager.getStringSync($r('app.string.field_name').id),
+                getString($r('app.string.field_name')),
                 this.config.name,
-                '例如: 公司内网',
+                getString($r('app.string.placeholder_name')),
                 (v) => this.config.name = v
               )
               if (this.getError('name').length > 0) {
@@ -255,12 +256,12 @@ struct ConfigEditPage {
             .width('100%')
           }
 
-          SectionCard({ title: getContext().resourceManager.getStringSync($r('app.string.section_interface').id) }) {
+          SectionCard({ title: getString($r('app.string.section_interface')) }) {
             Column() {
               this.FormInputOptional(
-                getContext().resourceManager.getStringSync($r('app.string.field_address').id),
+                getString($r('app.string.field_address')),
                 this.config.address,
-                '例如: 10.0.0.2/24',
+                getString($r('app.string.placeholder_address')),
                 (v) => this.config.address = v
               )
               if (this.getError('address').length > 0) {
@@ -272,7 +273,7 @@ struct ConfigEditPage {
               }
 
               SecureKeyField({
-                label: getContext().resourceManager.getStringSync($r('app.string.field_private_key').id),
+                label: getString($r('app.string.field_private_key')),
                 hasValue: this.config.privateKey.length > 0,
                 value: this.config.privateKey,
                 onReplace: (val) => this.config.privateKey = val
@@ -287,9 +288,9 @@ struct ConfigEditPage {
               }
 
               this.FormInputOptional(
-                getContext().resourceManager.getStringSync($r('app.string.field_dns').id),
+                getString($r('app.string.field_dns')),
                 this.config.dns,
-                '例如: 8.8.8.8, 1.1.1.1',
+                getString($r('app.string.placeholder_dns')),
                 (v) => this.config.dns = v
               )
               if (this.getError('dns').length > 0) {
@@ -301,9 +302,9 @@ struct ConfigEditPage {
               }
 
               this.FormInput(
-                getContext().resourceManager.getStringSync($r('app.string.field_mtu').id),
+                getString($r('app.string.field_mtu')),
                 this.config.mtu > 0 ? String(this.config.mtu) : '',
-                '自动',
+                getString($r('app.string.placeholder_mtu')),
                 (v) => this.config.mtu = v ? parseInt(v) : 0,
                 'mtu',
                 InputType.Number
@@ -312,12 +313,12 @@ struct ConfigEditPage {
             .width('100%')
           }
 
-          SectionCard({ title: getContext().resourceManager.getStringSync($r('app.string.section_peer').id) }) {
+          SectionCard({ title: getString($r('app.string.section_peer')) }) {
             Column() {
               KeyField({
-                label: getContext().resourceManager.getStringSync($r('app.string.field_public_key').id),
+                label: getString($r('app.string.field_public_key')),
                 value: this.config.peerPublicKey,
-                placeholder: '服务器公钥',
+                placeholder: getString($r('app.string.placeholder_public_key')),
                 onChange: (val) => this.config.peerPublicKey = val
               })
 
@@ -356,16 +357,16 @@ struct ConfigEditPage {
               }
 
               this.FormInput(
-                getContext().resourceManager.getStringSync($r('app.string.field_keepalive').id),
+                getString($r('app.string.field_keepalive')),
                 this.config.persistentKeepalive > 0 ? String(this.config.persistentKeepalive) : '',
-                '秒，默认 25',
+                getString($r('app.string.placeholder_keepalive')),
                 (v) => this.config.persistentKeepalive = v ? parseInt(v) : 0,
                 '',
                 InputType.Number
               )
 
               SecureKeyField({
-                label: getContext().resourceManager.getStringSync($r('app.string.field_preshared_key').id),
+                label: getString($r('app.string.field_preshared_key')),
                 hasValue: this.config.presharedKey.length > 0,
                 value: this.config.presharedKey,
                 onReplace: (val) => this.config.presharedKey = val
@@ -374,7 +375,7 @@ struct ConfigEditPage {
             .width('100%')
           }
 
-          SectionCard({ title: getContext().resourceManager.getStringSync($r('app.string.section_advanced').id) }) {
+          SectionCard({ title: getString($r('app.string.section_advanced')) }) {
             AdvancedSection({
               autoConnect: this.autoConnect,
               reconnectOnNetworkChange: this.reconnectOnNetworkChange,
@@ -388,7 +389,7 @@ struct ConfigEditPage {
           }
 
           if (this.config.id) {
-            Button(getContext().resourceManager.getStringSync($r('app.string.button_delete').id))
+            Button(getString($r('app.string.button_delete')))
               .fontSize(TYPOGRAPHY.body_md.size)
               .fontColor($r('app.color.danger'))
               .backgroundColor($r('app.color.danger_bg'))

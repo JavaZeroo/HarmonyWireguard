@@ -1,5 +1,4 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
-import { formatHandshake } from '../../common/Formatters';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 
 @Component
 export struct HandshakeCard {
@@ -8,7 +7,13 @@ export struct HandshakeCard {
   private getHandshakeText(): string {
     const now = Math.floor(Date.now() / 1000);
     const ago = this.lastHandshakeAt > 0 ? now - this.lastHandshakeAt : -1;
-    return formatHandshake(ago);
+    if (ago < 0) {
+      return getString($r('app.string.hint_handshake_never'));
+    }
+    if (ago < 60) {
+      return getString($r('app.string.hint_handshake_ago')).replace('%s', String(ago));
+    }
+    return getString($r('app.string.hint_handshake_min_ago')).replace('%s', String(Math.floor(ago / 60)));
   }
 
   build() {
@@ -19,7 +24,7 @@ export struct HandshakeCard {
         .margin({ right: SPACING.sm })
 
       Column() {
-        Text('最近握手')
+        Text(getString($r('app.string.label_last_handshake')))
           .fontSize(TYPOGRAPHY.caption.size)
           .fontColor($r('app.color.text_secondary'))
           .width('100%')

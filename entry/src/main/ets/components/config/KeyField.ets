@@ -1,5 +1,4 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
-import { promptAction } from '@kit.ArkUI';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 
 @Component
 export struct KeyField {
@@ -11,11 +10,12 @@ export struct KeyField {
   onChange?: (val: string) => void;
 
   private copyValue(): void {
-    // Clipboard set API would go here
-    promptAction.showToast({
-      message: getContext().resourceManager.getStringSync($r('app.string.hint_copied').id),
-      duration: 1500
-    });
+    try {
+      this.getUIContext().getPromptAction().showToast({
+        message: getString($r('app.string.hint_copied')),
+        duration: 1500
+      });
+    } catch {}
   }
 
   build() {

@@ -1,6 +1,5 @@
 import { router } from '@kit.ArkUI';
-import { promptAction } from '@kit.ArkUI';
-import { SPACING, RADIUS, TYPOGRAPHY } from '../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
 import { deriveRouteMode, parseEndpoint } from '../common/Utils';
 import { SectionCard } from '../components/common/SectionCard';
 import { configManager } from '../service/ConfigManager';
@@ -35,40 +34,38 @@ struct ConfigPreviewPage {
 
   private getRouteModeLabel(): string {
     const mode = deriveRouteMode(this.config.allowedIPs);
-    const rm = getContext().resourceManager;
     switch (mode) {
       case 'global':
-        return rm.getStringSync($r('app.string.route_global').id);
+        return getString($r('app.string.route_global'));
       case 'lanOnly':
-        return rm.getStringSync($r('app.string.route_lan_only').id);
+        return getString($r('app.string.route_lan_only'));
       default:
-        return rm.getStringSync($r('app.string.route_custom').id);
+        return getString($r('app.string.route_custom'));
     }
   }
 
   private computeRisks(): string[] {
     const risks: string[] = [];
-    const rm = getContext().resourceManager;
     const allowed = this.config.allowedIPs || '';
 
     if (allowed.includes('0.0.0.0/0')) {
-      risks.push(rm.getStringSync($r('app.string.risk_global_proxy_v4').id));
+      risks.push(getString($r('app.string.risk_global_proxy_v4')));
     }
     if (allowed.includes('::/0')) {
-      risks.push(rm.getStringSync($r('app.string.risk_global_proxy_v6').id));
+      risks.push(getString($r('app.string.risk_global_proxy_v6')));
     }
     if (!this.config.dns || this.config.dns.trim().length === 0) {
-      risks.push(rm.getStringSync($r('app.string.risk_no_dns').id));
+      risks.push(getString($r('app.string.risk_no_dns')));
     }
     if (this.config.persistentKeepalive === 0) {
-      risks.push(rm.getStringSync($r('app.string.risk_no_keepalive').id));
+      risks.push(getString($r('app.string.risk_no_keepalive')));
     }
     const ep = parseEndpoint(this.config.endpoint);
     if (ep && !ep.isIPv6 && !/^\d+\.\d+\.\d+\.\d+$/.test(ep.host)) {
-      risks.push(rm.getStringSync($r('app.string.risk_domain_endpoint').id));
+      risks.push(getString($r('app.string.risk_domain_endpoint')));
     }
     if (this.config.mtu === 0) {
-      risks.push(rm.getStringSync($r('app.string.risk_auto_mtu').id));
+      risks.push(getString($r('app.string.risk_auto_mtu')));
     }
 
     return risks;
@@ -79,7 +76,9 @@ struct ConfigPreviewPage {
       this.config.id = Date.now().toString();
     }
     configManager.saveConfig(this.config);
-    promptAction.showToast({ message: 'Saved', duration: 1500 });
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: getString($r('app.string.toast_saved')), duration: 1500 });
+    } catch {}
     router.back();
   }
 
@@ -91,7 +90,7 @@ struct ConfigPreviewPage {
         .fontColor($r('app.color.text_secondary'))
         .width('35%')
 
-      Text(isMasked ? getContext().resourceManager.getStringSync($r('app.string.hint_key_hidden').id) : value)
+      Text(isMasked ? getString($r('app.string.hint_key_hidden')) : value)
         .fontSize(TYPOGRAPHY.body_sm.size)
         .fontColor(isMasked ? $r('app.color.text_tertiary') : $r('app.color.text_primary'))
         .layoutWeight(1)
@@ -114,14 +113,14 @@ struct ConfigPreviewPage {
             router.back();
           })
 
-        Text(getContext().resourceManager.getStringSync($r('app.string.page_config_preview').id))
+        Text(getString($r('app.string.page_config_preview')))
           .fontSize(TYPOGRAPHY.title_sm.size)
           .fontWeight(TYPOGRAPHY.title_sm.weight)
           .fontColor($r('app.color.text_primary'))
           .layoutWeight(1)
           .textAlign(TextAlign.Center)
 
-        Text(getContext().resourceManager.getStringSync($r('app.string.button_save').id))
+        Text(getString($r('app.string.button_save')))
           .fontSize(TYPOGRAPHY.body_md.size)
           .fontColor($r('app.color.primary'))
           .onClick(() => {
@@ -138,13 +137,13 @@ struct ConfigPreviewPage {
           // Name card
           SectionCard({ cardPadding: SPACING.lg }) {
             Column() {
-              Text(this.config.name || 'Untitled')
+              Text(this.config.name || getString($r('app.string.label_untitled')))
                 .fontSize(TYPOGRAPHY.title_md.size)
                 .fontWeight(TYPOGRAPHY.title_md.weight)
                 .fontColor($r('app.color.text_primary'))
                 .width('100%')
 
-              Text(getContext().resourceManager.getStringSync($r('app.string.page_config_preview').id))
+              Text(getString($r('app.string.page_config_preview')))
                 .fontSize(TYPOGRAPHY.body_sm.size)
                 .fontColor($r('app.color.text_secondary'))
                 .width('100%')
@@ -154,34 +153,34 @@ struct ConfigPreviewPage {
           }
 
           // Interface
-          SectionCard({ title: getContext().resourceManager.getStringSync($r('app.string.section_interface').id) }) {
+          SectionCard({ title: getString($r('app.string.section_interface')) }) {
             Column() {
               this.InfoRow('Address', this.config.address);
-              this.InfoRow('DNS', this.config.dns || 'Auto');
-              this.InfoRow('MTU', this.config.mtu > 0 ? String(this.config.mtu) : 'Auto');
+              this.InfoRow('DNS', this.config.dns || getString($r('app.string.label_auto')));
+              this.InfoRow('MTU', this.config.mtu > 0 ? String(this.config.mtu) : getString($r('app.string.label_auto')));
               this.InfoRow('PrivateKey', '', true);
             }
             .width('100%')
           }
 
           // Peer
-          SectionCard({ title: getContext().resourceManager.getStringSync($r('app.string.section_peer').id) }) {
+          SectionCard({ title: getString($r('app.string.section_peer')) }) {
             Column() {
               this.InfoRow('Endpoint', this.config.endpoint);
               this.InfoRow('PublicKey', this.config.peerPublicKey.substring(0, 20) + '...');
               if (this.config.presharedKey) {
                 this.InfoRow('PresharedKey', '', true);
               }
-              this.InfoRow('Keepalive', this.config.persistentKeepalive > 0 ? this.config.persistentKeepalive + 's' : 'Off');
+              this.InfoRow('Keepalive', this.config.persistentKeepalive > 0 ? this.config.persistentKeepalive + 's' : getString($r('app.string.label_off')));
             }
             .width('100%')
           }
 
           // Route Mode
-          SectionCard({ title: getContext().resourceManager.getStringSync($r('app.string.section_route_dns').id) }) {
+          SectionCard({ title: getString($r('app.string.section_route_dns')) }) {
             Column() {
               Row() {
-                Text(getContext().resourceManager.getStringSync($r('app.string.field_allowed_ips').id))
+                Text(getString($r('app.string.field_allowed_ips')))
                   .fontSize(TYPOGRAPHY.body_sm.size)
                   .fontColor($r('app.color.text_secondary'))
                   .width('35%')
@@ -232,7 +231,7 @@ struct ConfigPreviewPage {
 
           // Actions
           Row() {
-            Button(getContext().resourceManager.getStringSync($r('app.string.button_edit').id))
+            Button(getString($r('app.string.button_edit')))
               .fontSize(TYPOGRAPHY.body_md.size)
               .fontColor($r('app.color.primary'))
               .backgroundColor($r('app.color.surface_subtle'))
@@ -244,7 +243,7 @@ struct ConfigPreviewPage {
                 router.pushUrl({ url: 'pages/ConfigEditPage', params: { config: this.config } });
               })
 
-            Button(getContext().resourceManager.getStringSync($r('app.string.button_save').id))
+            Button(getString($r('app.string.button_save')))
               .fontSize(TYPOGRAPHY.body_md.size)
               .fontColor('#FFFFFF')
               .backgroundColor($r('app.color.primary'))

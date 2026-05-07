@@ -1,4 +1,4 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 import type { DiagnosticItem } from '../../model/WgConfig';
 
 @Component
@@ -34,13 +34,13 @@ export struct DiagnosticChecklist {
   build() {
     Column({ space: SPACING.sm }) {
       Row() {
-        Text(getContext().resourceManager.getStringSync($r('app.string.section_diagnostics').id))
+        Text(getString($r('app.string.section_diagnostics')))
           .fontSize(TYPOGRAPHY.title_sm.size)
           .fontWeight(TYPOGRAPHY.title_sm.weight)
           .fontColor($r('app.color.text_primary'))
           .layoutWeight(1)
 
-        Button('重新检测')
+        Button(getString($r('app.string.button_retry')))
           .fontSize(12)
           .fontColor($r('app.color.primary'))
           .backgroundColor('transparent')

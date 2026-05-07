@@ -105,3 +105,12 @@ export function getWindowWidth(): number {
     return 360;
   }
 }
+
+// Helper to get string resource safely
+export function getString(resource: Resource): string {
+  try {
+    return getContext().resourceManager.getStringSync(resource.id);
+  } catch {
+    return '';
+  }
+}

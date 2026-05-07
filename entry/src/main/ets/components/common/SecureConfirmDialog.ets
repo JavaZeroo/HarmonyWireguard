@@ -1,4 +1,4 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 
 @CustomDialog
 export struct SecureConfirmDialog {
@@ -37,7 +37,7 @@ export struct SecureConfirmDialog {
       }
 
       Row() {
-        Button(this.cancelText || getContext().resourceManager.getStringSync($r('app.string.button_cancel').id))
+        Button(this.cancelText || getString($r('app.string.button_cancel')))
           .fontSize(TYPOGRAPHY.body_md.size)
           .fontColor($r('app.color.text_secondary'))
           .backgroundColor('transparent')
@@ -47,7 +47,7 @@ export struct SecureConfirmDialog {
             this.controller.close();
           })
 
-        Button(this.confirmText || getContext().resourceManager.getStringSync($r('app.string.button_confirm').id))
+        Button(this.confirmText || getString($r('app.string.button_confirm')))
           .fontSize(TYPOGRAPHY.body_md.size)
           .fontColor(this.confirmColor)
           .backgroundColor('transparent')

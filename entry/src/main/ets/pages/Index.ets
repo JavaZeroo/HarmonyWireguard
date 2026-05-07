@@ -5,13 +5,14 @@ import { router } from '@kit.ArkUI';
 import { configManager } from '../service/ConfigManager';
 import type { WgConfig, TunnelStatusType } from '../model/WgConfig';
 import { APP_CONSTANTS } from '../common/Constants';
-import { SPACING, TYPOGRAPHY, Breakpoint, getBreakpoint } from '../common/DesignSystem';
+import { SPACING, TYPOGRAPHY, Breakpoint, getBreakpoint, getString } from '../common/DesignSystem';
 import { ConnectionHeroCard } from '../components/tunnel/ConnectionHeroCard';
 import { TunnelListItem } from '../components/tunnel/TunnelListItem';
 import { EmptyState } from '../components/common/EmptyState';
 import { DiagnosticSummaryCard } from '../components/tunnel/DiagnosticSummaryCard';
 import type { DiagnosticItem } from '../model/WgConfig';
 import { tunnelRuntimeService } from '../service/TunnelRuntimeService';
+import { TunnelDetailPanel } from '../components/tunnel/TunnelDetailPanel';
 
 const TAG = 'IndexPage';
 
@@ -118,11 +119,11 @@ struct Index {
   @State breakpoint: Breakpoint = Breakpoint.COMPACT;
   @State windowWidth: number = 360;
 
-  private context = getContext(this) as common.UIAbilityContext;
   private unsubscribe?: () => void;
 
   aboutToAppear(): void {
-    configManager.init(this.context);
+    const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
+    configManager.init(ctx);
     this.loadConfigs();
     this.updateBreakpoint();
 
@@ -208,14 +209,14 @@ struct Index {
   @Builder
   EmptyActionBuilder() {
     Column({ space: SPACING.sm }) {
-      Button(getContext().resourceManager.getStringSync($r('app.string.button_scan_qr').id))
+      Button(getString($r('app.string.button_scan_qr')))
         .width('60%')
         .height(44)
         .onClick(() => {
           router.pushUrl({ url: 'pages/ImportConfigPage' });
         })
 
-      Button(getContext().resourceManager.getStringSync($r('app.string.button_import_file').id))
+      Button(getString($r('app.string.button_import_file')))
         .width('60%')
         .height(44)
         .backgroundColor($r('app.color.surface_subtle'))
@@ -224,7 +225,7 @@ struct Index {
           router.pushUrl({ url: 'pages/ImportConfigPage' });
         })
 
-      Button(getContext().resourceManager.getStringSync($r('app.string.button_create_manual').id))
+      Button(getString($r('app.string.button_create_manual')))
         .width('60%')
         .height(44)
         .backgroundColor($r('app.color.surface_subtle'))
@@ -237,111 +238,128 @@ struct Index {
   }
 
   @Builder
-  ConfigListColumn() {
+  ConfigListContent() {
     Column() {
-      Row() {
-        Text(getContext().resourceManager.getStringSync($r('app.string.page_home').id))
-          .fontSize(TYPOGRAPHY.title_lg.size)
-          .fontWeight(TYPOGRAPHY.title_lg.weight)
-          .fontColor($r('app.color.text_primary'))
-
-        Blank()
-
-        SymbolGlyph($r('sys.symbol.list_bullet'))
-          .fontSize(24)
-          .fontColor([$r('app.color.text_secondary')])
-          .onClick(() => {
-            router.pushUrl({ url: 'pages/SettingsPage' });
-          })
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.md, right: SPACING.md })
-      .backgroundColor($r('app.color.surface'))
-
       if (this.configs.length === 0) {
         EmptyState({
-          title: getContext().resourceManager.getStringSync($r('app.string.empty_config_title').id),
-          description: getContext().resourceManager.getStringSync($r('app.string.empty_config_desc').id)
+          icon: 'wifi_slash',
+          title: getString($r('app.string.empty_config_title')),
+          description: getString($r('app.string.empty_config_desc'))
         }) {
           this.EmptyActionBuilder()
         }
       } else {
-        Scroll() {
-          Column() {
-            if (this.activeConfigId) {
-              ConnectionHeroCard({
-                status: this.activeStatus,
-                tunnelName: this.getActiveConfig()?.name || '',
-                endpoint: this.getActiveConfig()?.endpoint || '',
-                lastHandshakeAt: this.lastHandshakeAt,
-                rxBytes: this.rxBytes,
-                txBytes: this.txBytes,
-                onPrimaryAction: () => {
-                  if (this.activeStatus === 'connected') {
-                    const cfg = this.getActiveConfig();
-                    if (cfg) this.toggleVpn(cfg, false);
-                  } else if (this.activeStatus === 'disconnected' || this.activeStatus === 'failed') {
-                    const cfg = this.getActiveConfig();
-                    if (cfg) this.toggleVpn(cfg, true);
-                  }
-                },
-                onDetail: () => {
-                  const cfg = this.getActiveConfig();
-                  if (!cfg) return;
-                  if (this.breakpoint === Breakpoint.COMPACT) {
-                    router.pushUrl({ url: 'pages/TunnelDetailPage', params: { id: cfg.id } });
-                  } else {
-                    this.selectedConfigId = cfg.id;
-                  }
-                }
-              })
+        if (this.activeConfigId) {
+          ConnectionHeroCard({
+            status: this.activeStatus,
+            tunnelName: this.getActiveConfig()?.name || '',
+            endpoint: this.getActiveConfig()?.endpoint || '',
+            lastHandshakeAt: this.lastHandshakeAt,
+            rxBytes: this.rxBytes,
+            txBytes: this.txBytes,
+            onPrimaryAction: () => {
+              if (this.activeStatus === 'connected') {
+                const cfg = this.getActiveConfig();
+                if (cfg) this.toggleVpn(cfg, false);
+              } else if (this.activeStatus === 'disconnected' || this.activeStatus === 'failed') {
+                const cfg = this.getActiveConfig();
+                if (cfg) this.toggleVpn(cfg, true);
+              }
+            },
+            onDetail: () => {
+              const cfg = this.getActiveConfig();
+              if (!cfg) return;
+              if (this.breakpoint === Breakpoint.COMPACT) {
+                router.pushUrl({ url: 'pages/TunnelDetailPage', params: { id: cfg.id } });
+              } else {
+                this.selectedConfigId = cfg.id;
+              }
             }
+          })
+          .margin({ left: SPACING.md, right: SPACING.md, top: SPACING.md })
+        }
 
-            if (this.diagnostics.length > 0) {
-              DiagnosticSummaryCard({ items: this.diagnostics })
-            }
+        if (this.diagnostics.length > 0) {
+          DiagnosticSummaryCard({ items: this.diagnostics })
+            .margin({ left: SPACING.md, right: SPACING.md, top: SPACING.md })
+        }
 
-            Text(getContext().resourceManager.getStringSync($r('app.string.section_configs').id))
-              .fontSize(TYPOGRAPHY.title_sm.size)
-              .fontWeight(TYPOGRAPHY.title_sm.weight)
-              .fontColor($r('app.color.text_primary'))
-              .width('100%')
-              .margin({ top: SPACING.lg, bottom: SPACING.sm, left: SPACING.md, right: SPACING.md })
-
-            Column({ space: SPACING.sm }) {
-              ForEach(this.configs, (config: WgConfig) => {
-                TunnelListItem({
-                  config: config,
-                  status: config.id === this.activeConfigId ? this.activeStatus : 'disconnected',
-                  selected: config.id === this.selectedConfigId || config.id === this.activeConfigId,
-                  onSelect: () => {
-                    if (this.breakpoint === Breakpoint.COMPACT) {
-                      router.pushUrl({ url: 'pages/TunnelDetailPage', params: { id: config.id } });
-                    } else {
-                      this.selectedConfigId = config.id;
-                    }
-                  },
-                  onConnect: () => {
-                    this.toggleVpn(config, true);
-                  },
-                  onDisconnect: () => {
-                    this.toggleVpn(config, false);
-                  }
-                })
-                  .margin({ left: SPACING.md, right: SPACING.md })
-              }, (config: WgConfig) => config.id)
-            }
-            .width('100%')
-            .padding({ bottom: SPACING.xxl })
-          }
+        Text(getString($r('app.string.section_configs')))
+          .fontSize(TYPOGRAPHY.title_sm.size)
+          .fontWeight(TYPOGRAPHY.title_sm.weight)
+          .fontColor($r('app.color.text_primary'))
           .width('100%')
+          .margin({ top: SPACING.lg, bottom: SPACING.sm, left: SPACING.md, right: SPACING.md })
+
+        Column({ space: SPACING.sm }) {
+          ForEach(this.configs, (config: WgConfig) => {
+            TunnelListItem({
+              config: config,
+              status: config.id === this.activeConfigId ? this.activeStatus : 'disconnected',
+              selected: config.id === this.selectedConfigId || config.id === this.activeConfigId,
+              onSelect: () => {
+                if (this.breakpoint === Breakpoint.COMPACT) {
+                  router.pushUrl({ url: 'pages/TunnelDetailPage', params: { id: config.id } });
+                } else {
+                  this.selectedConfigId = config.id;
+                }
+              },
+              onConnect: () => {
+                this.toggleVpn(config, true);
+              },
+              onDisconnect: () => {
+                this.toggleVpn(config, false);
+              }
+            })
+            .margin({ left: SPACING.md, right: SPACING.md })
+          }, (config: WgConfig) => config.id)
+        }
+        .width('100%')
+        .padding({ bottom: 96 })
+      }
+    }
+    .width('100%')
+  }
+
+  @Builder
+  CompactLayout() {
+    Stack({ alignContent: Alignment.BottomEnd }) {
+      Column() {
+        // Header
+        Row() {
+          Text(getString($r('app.string.page_home')))
+            .fontSize(TYPOGRAPHY.title_lg.size)
+            .fontWeight(TYPOGRAPHY.title_lg.weight)
+            .fontColor($r('app.color.text_primary'))
+
+          Blank()
+
+          SymbolGlyph($r('sys.symbol.list_bullet'))
+            .fontSize(24)
+            .fontColor([$r('app.color.text_secondary')])
+            .onClick(() => {
+              router.pushUrl({ url: 'pages/SettingsPage' });
+            })
+        }
+        .width('100%')
+        .height(56)
+        .padding({ left: SPACING.md, right: SPACING.md })
+        .backgroundColor($r('app.color.surface'))
+
+        Scroll() {
+          this.ConfigListContent()
         }
         .width('100%')
         .layoutWeight(1)
         .scrollable(ScrollDirection.Vertical)
         .scrollBar(BarState.Auto)
+      }
+      .width('100%')
+      .height('100%')
+      .backgroundColor($r('app.color.background'))
 
+      // FAB only shown when there are configs
+      if (this.configs.length > 0) {
         Button() {
           Text('+')
             .fontSize(24)
@@ -352,7 +370,7 @@ struct Index {
         .backgroundColor($r('app.color.primary'))
         .borderRadius(28)
         .shadow({ radius: 8, color: 'rgba(0,0,0,0.20)', offsetY: 4 })
-        .position({ x: 'calc(100% - 72vp)', y: 'calc(100% - 88vp)' })
+        .margin({ right: SPACING.md, bottom: SPACING.lg })
         .onClick(() => {
           router.pushUrl({ url: 'pages/ImportConfigPage' });
         })
@@ -360,13 +378,12 @@ struct Index {
     }
     .width('100%')
     .height('100%')
-    .backgroundColor($r('app.color.background'))
   }
 
   @Builder
-  DetailPlaceholderColumn() {
+  DetailPlaceholder() {
     Column() {
-      Text('选择一个配置查看详情')
+      Text(getString($r('app.string.hint_select_config_detail')))
         .fontSize(TYPOGRAPHY.body_lg.size)
         .fontColor($r('app.color.text_secondary'))
     }
@@ -378,9 +395,9 @@ struct Index {
   }
 
   @Builder
-  SidebarColumn() {
+  SidebarNavigation() {
     Column() {
-      Text(getContext().resourceManager.getStringSync($r('app.string.app_name').id))
+      Text(getString($r('app.string.app_name')))
         .fontSize(TYPOGRAPHY.title_sm.size)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
@@ -423,7 +440,7 @@ struct Index {
           .fontColor([$r('app.color.text_secondary')])
           .margin({ right: SPACING.sm })
 
-        Text(getContext().resourceManager.getStringSync($r('app.string.page_settings').id))
+        Text(getString($r('app.string.page_settings')))
           .fontSize(TYPOGRAPHY.body_sm.size)
           .fontColor($r('app.color.text_secondary'))
           .layoutWeight(1)
@@ -441,124 +458,122 @@ struct Index {
     .backgroundColor($r('app.color.surface'))
   }
 
+  @Builder
+  MediumLayout() {
+    Row() {
+      Column() {
+        // Header
+        Row() {
+          Text(getString($r('app.string.page_home')))
+            .fontSize(TYPOGRAPHY.title_lg.size)
+            .fontWeight(TYPOGRAPHY.title_lg.weight)
+            .fontColor($r('app.color.text_primary'))
+
+          Blank()
+
+          SymbolGlyph($r('sys.symbol.list_bullet'))
+            .fontSize(24)
+            .fontColor([$r('app.color.text_secondary')])
+            .onClick(() => {
+              router.pushUrl({ url: 'pages/SettingsPage' });
+            })
+        }
+        .width('100%')
+        .height(56)
+        .padding({ left: SPACING.md, right: SPACING.md })
+        .backgroundColor($r('app.color.surface'))
+
+        Scroll() {
+          this.ConfigListContent()
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .scrollable(ScrollDirection.Vertical)
+        .scrollBar(BarState.Auto)
+      }
+      .width(320)
+      .height('100%')
+      .backgroundColor($r('app.color.background'))
+
+      Divider()
+        .vertical(true)
+        .strokeWidth(1)
+        .color($r('app.color.divider'))
+
+      if (this.selectedConfigId) {
+        TunnelDetailPanel({ configId: this.selectedConfigId })
+          .layoutWeight(1)
+      } else {
+        Stack() {
+          this.DetailPlaceholder()
+        }
+        .layoutWeight(1)
+      }
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  @Builder
+  ExpandedLayout() {
+    Row() {
+      Stack() {
+        this.SidebarNavigation()
+      }
+      .width(240)
+      .height('100%')
+
+      Divider()
+        .vertical(true)
+        .strokeWidth(1)
+        .color($r('app.color.divider'))
+
+      Column() {
+        Scroll() {
+          this.ConfigListContent()
+        }
+        .width('100%')
+        .layoutWeight(1)
+        .scrollable(ScrollDirection.Vertical)
+        .scrollBar(BarState.Auto)
+      }
+      .width(320)
+      .height('100%')
+      .backgroundColor($r('app.color.background'))
+
+      Divider()
+        .vertical(true)
+        .strokeWidth(1)
+        .color($r('app.color.divider'))
+
+      if (this.selectedConfigId) {
+        TunnelDetailPanel({ configId: this.selectedConfigId })
+          .layoutWeight(1)
+      } else {
+        Stack() {
+          this.DetailPlaceholder()
+        }
+        .layoutWeight(1)
+      }
+    }
+    .width('100%')
+    .height('100%')
+  }
+
   build() {
     Stack() {
       if (this.breakpoint === Breakpoint.COMPACT) {
-        this.ConfigListColumn()
+        this.CompactLayout()
       } else if (this.breakpoint === Breakpoint.MEDIUM) {
-        Row() {
-          Column() {
-            this.ConfigListColumn()
-          }
-          .width(280)
-          .height('100%')
-
-          Divider()
-            .vertical(true)
-            .strokeWidth(1)
-            .color($r('app.color.divider'))
-
-          if (this.selectedConfigId) {
-            Column() {
-              Text(this.getSelectedConfig()?.name || 'Detail')
-                .fontSize(TYPOGRAPHY.title_sm.size)
-                .fontWeight(FontWeight.Bold)
-                .fontColor($r('app.color.text_primary'))
-                .width('100%')
-                .padding(SPACING.md)
-
-              Text('平板双栏详情视图')
-                .fontSize(TYPOGRAPHY.body_md.size)
-                .fontColor($r('app.color.text_secondary'))
-                .width('100%')
-                .layoutWeight(1)
-                .textAlign(TextAlign.Center)
-            }
-            .width('100%')
-            .height('100%')
-            .backgroundColor($r('app.color.background'))
-            .layoutWeight(1)
-          } else {
-            Column() {
-              this.DetailPlaceholderColumn()
-            }
-            .layoutWeight(1)
-          }
-        }
-        .width('100%')
-        .height('100%')
+        this.MediumLayout()
       } else {
-        Row() {
-          Column() {
-            this.SidebarColumn()
-          }
-          .width(240)
-          .height('100%')
-
-          Divider()
-            .vertical(true)
-            .strokeWidth(1)
-            .color($r('app.color.divider'))
-
-          if (this.selectedConfigId) {
-            Column() {
-              Text(this.getSelectedConfig()?.name || 'Detail')
-                .fontSize(TYPOGRAPHY.title_sm.size)
-                .fontWeight(FontWeight.Bold)
-                .fontColor($r('app.color.text_primary'))
-                .width('100%')
-                .padding(SPACING.md)
-
-              Text('PC 大屏三栏详情视图')
-                .fontSize(TYPOGRAPHY.body_md.size)
-                .fontColor($r('app.color.text_secondary'))
-                .width('100%')
-                .layoutWeight(1)
-                .textAlign(TextAlign.Center)
-            }
-            .width('100%')
-            .height('100%')
-            .backgroundColor($r('app.color.background'))
-            .layoutWeight(1)
-          } else {
-            Column() {
-              this.DetailPlaceholderColumn()
-            }
-            .layoutWeight(1)
-          }
-
-          Divider()
-            .vertical(true)
-            .strokeWidth(1)
-            .color($r('app.color.divider'))
-
-          Column() {
-            Text('诊断与日志')
-              .fontSize(TYPOGRAPHY.title_sm.size)
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-              .width('100%')
-              .padding(SPACING.md)
-
-            Text('常驻诊断面板')
-              .fontSize(TYPOGRAPHY.body_md.size)
-              .fontColor($r('app.color.text_secondary'))
-              .width('100%')
-              .layoutWeight(1)
-              .textAlign(TextAlign.Center)
-          }
-          .width(320)
-          .height('100%')
-          .backgroundColor($r('app.color.surface'))
-        }
-        .width('100%')
-        .height('100%')
+        this.ExpandedLayout()
       }
     }
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
-    .onAreaChange((oldArea, newArea) => {
+    .onAreaChange((_oldArea, newArea) => {
       if (newArea.width > 0) {
         this.windowWidth = px2vp(newArea.width as number);
         this.breakpoint = getBreakpoint(this.windowWidth);

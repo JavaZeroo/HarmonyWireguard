@@ -1,4 +1,4 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 import type { RouteModeType } from '../../model/WgConfig';
 import { deriveRouteMode } from '../../common/Utils';
 
@@ -70,7 +70,7 @@ export struct RouteModeSelector {
 
   build() {
     Column() {
-      Text(getContext().resourceManager.getStringSync($r('app.string.field_allowed_ips').id))
+      Text(getString($r('app.string.field_allowed_ips')))
         .fontSize(TYPOGRAPHY.label.size)
         .fontWeight(TYPOGRAPHY.label.weight)
         .fontColor($r('app.color.text_primary'))
@@ -79,16 +79,16 @@ export struct RouteModeSelector {
 
       Column({ space: SPACING.xs }) {
         this.ModeOption('global',
-          getContext().resourceManager.getStringSync($r('app.string.route_global').id),
+          getString($r('app.string.route_global')),
           '0.0.0.0/0, ::/0')
 
         this.ModeOption('lanOnly',
-          getContext().resourceManager.getStringSync($r('app.string.route_lan_only').id),
+          getString($r('app.string.route_lan_only')),
           '192.168.0.0/16, 10.0.0.0/8')
 
         this.ModeOption('custom',
-          getContext().resourceManager.getStringSync($r('app.string.route_custom').id),
-          '手动配置 AllowedIPs')
+          getString($r('app.string.route_custom')),
+          'Custom AllowedIPs')
       }
       .width('100%')
       .padding(SPACING.sm)
@@ -97,7 +97,7 @@ export struct RouteModeSelector {
       .margin({ bottom: SPACING.sm })
 
       if (this.mode === 'custom' || this.mode === 'lanOnly') {
-        TextInput({ placeholder: '例如: 192.168.0.0/16, 10.0.0.0/8', text: this.customCidrs })
+        TextInput({ placeholder: getString($r('app.string.placeholder_custom_cidrs')), text: this.customCidrs })
           .fontSize(TYPOGRAPHY.body_md.size)
           .width('100%')
           .height(44)

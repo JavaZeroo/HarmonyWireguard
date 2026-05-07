@@ -1,6 +1,5 @@
-import { SPACING, RADIUS, TYPOGRAPHY } from '../../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
 import { SecureConfirmDialog } from '../common/SecureConfirmDialog';
-import { promptAction } from '@kit.ArkUI';
 
 @Component
 export struct SecureKeyField {
@@ -18,9 +17,9 @@ export struct SecureKeyField {
   private showRevealDialog(): void {
     this.dialogController = new CustomDialogController({
       builder: SecureConfirmDialog({
-        title: getContext().resourceManager.getStringSync($r('app.string.dialog_reveal_key_title').id),
-        message: getContext().resourceManager.getStringSync($r('app.string.dialog_reveal_key_message').id),
-        confirmText: getContext().resourceManager.getStringSync($r('app.string.dialog_reveal_key_action').id),
+        title: getString($r('app.string.dialog_reveal_key_title')),
+        message: getString($r('app.string.dialog_reveal_key_message')),
+        confirmText: getString($r('app.string.dialog_reveal_key_action')),
         confirmColor: $r('app.color.warning'),
         onConfirm: () => {
           this.revealed = true;
@@ -43,21 +42,20 @@ export struct SecureKeyField {
     }, 30000);
   }
 
-  private handleAppBackground(): void {
-    this.revealed = false;
-  }
-
   private copyValue(): void {
-    // Clipboard set API would go here
-    promptAction.showToast({
-      message: getContext().resourceManager.getStringSync($r('app.string.hint_copied').id),
-      duration: 1500
-    });
-    setTimeout(() => {
-      promptAction.showToast({
-        message: getContext().resourceManager.getStringSync($r('app.string.hint_clipboard_cleared').id),
-        duration: 2000
+    try {
+      this.getUIContext().getPromptAction().showToast({
+        message: getString($r('app.string.hint_copied')),
+        duration: 1500
       });
+    } catch {}
+    setTimeout(() => {
+      try {
+        this.getUIContext().getPromptAction().showToast({
+          message: getString($r('app.string.hint_clipboard_cleared')),
+          duration: 2000
+        });
+      } catch {}
     }, 2000);
   }
 
@@ -78,7 +76,7 @@ export struct SecureKeyField {
 
       Row() {
         if (this.hasValue && !this.revealed) {
-          Text(getContext().resourceManager.getStringSync($r('app.string.hint_key_hidden').id))
+          Text(getString($r('app.string.hint_key_hidden')))
             .fontSize(TYPOGRAPHY.body_md.size)
             .fontColor($r('app.color.text_tertiary'))
             .layoutWeight(1)
@@ -90,7 +88,7 @@ export struct SecureKeyField {
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         } else {
-          TextInput({ placeholder: 'Base64 encoded 32-byte key', text: this.value })
+          TextInput({ placeholder: getString($r('app.string.placeholder_private_key')), text: this.value })
             .fontSize(TYPOGRAPHY.body_md.size)
             .layoutWeight(1)
             .backgroundColor('transparent')
@@ -101,7 +99,7 @@ export struct SecureKeyField {
         }
 
         if (this.hasValue) {
-          Button(this.revealed ? 'Hide' : 'View')
+          Button(this.revealed ? getString($r('app.string.button_hide')) : getString($r('app.string.button_view')))
             .fontSize(12)
             .fontColor($r('app.color.primary'))
             .backgroundColor('transparent')
@@ -118,7 +116,7 @@ export struct SecureKeyField {
             })
 
           if (this.revealed) {
-            Button('Copy')
+            Button(getString($r('app.string.button_copy')))
               .fontSize(12)
               .fontColor($r('app.color.primary'))
               .backgroundColor('transparent')
