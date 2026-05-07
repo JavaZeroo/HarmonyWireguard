@@ -1,6 +1,20 @@
 {
   "app": {
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "material": {
+          "storePassword": "00000020205491574B84D60AC5E634A3C4D9384CA5F70006E51BE4A97D906A9285EBC4D537BE633332F726B7EB031479",
+          "certpath": "/storage/Users/currentUser/appdata/el2/base/com.huawei.devecostudio/files/ohos/config/default_HarmonyWireguard_D2bMvLPBFCMHevofUAt2KRK3lXs-8veyvbdE2WbSzY.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "00000020205491574B84D60AC5E634A3C4D9384CA5F70006E51BE4A97D906A9285EBC4D537BE633332F726B7EB031479",
+          "profile": "/storage/Users/currentUser/appdata/el2/base/com.huawei.devecostudio/files/ohos/config/default_HarmonyWireguard_D2bMvLPBFCMHevofUAt2KRK3lXs-8veyvbdE2WbSzY.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "/storage/Users/currentUser/appdata/el2/base/com.huawei.devecostudio/files/ohos/config/default_HarmonyWireguard_D2bMvLPBFCMHevofUAt2KRK3lXs-8veyvbdE2WbSzY.p12"
+        },
+        "type": "HarmonyOS"
+      }
+    ],
     "products": [
       {
         "name": "default",

@@ -1,7 +1,11 @@
 {
   "src": [
     "pages/Index",
+    "pages/ImportConfigPage",
+    "pages/ConfigPreviewPage",
     "pages/ConfigEditPage",
-    "pages/StatusPage"
+    "pages/TunnelDetailPage",
+    "pages/SettingsPage",
+    "pages/AboutPage"
   ]
 }
