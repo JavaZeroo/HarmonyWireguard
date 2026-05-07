@@ -1,16 +1,106 @@
 {
   "string": [
-    {
-      "name": "module_desc",
-      "value": "module description"
-    },
-    {
-      "name": "EntryAbility_desc",
-      "value": "description"
-    },
-    {
-      "name": "EntryAbility_label",
-      "value": "label"
-    }
+    { "name": "app_name", "value": "WireGuard" },
+
+    { "name": "page_home", "value": "WireGuard" },
+    { "name": "page_import_config", "value": "Add Configuration" },
+    { "name": "page_config_preview", "value": "Import Preview" },
+    { "name": "page_config_edit", "value": "Edit Configuration" },
+    { "name": "page_tunnel_detail", "value": "Connection Details" },
+    { "name": "page_settings", "value": "Settings" },
+    { "name": "page_about", "value": "About" },
+
+    { "name": "status_connected", "value": "Connected" },
+    { "name": "status_connecting", "value": "Connecting" },
+    { "name": "status_disconnected", "value": "Disconnected" },
+    { "name": "status_failed", "value": "Connection Failed" },
+
+    { "name": "button_connect", "value": "Connect" },
+    { "name": "button_disconnect", "value": "Disconnect" },
+    { "name": "button_retry", "value": "Retry" },
+    { "name": "button_detail", "value": "View Details" },
+    { "name": "button_add_config", "value": "Add Configuration" },
+    { "name": "button_scan_qr", "value": "Scan QR Code" },
+    { "name": "button_import_file", "value": "Import from File" },
+    { "name": "button_import_clipboard", "value": "Import from Clipboard" },
+    { "name": "button_create_manual", "value": "Create Manually" },
+    { "name": "button_save", "value": "Save" },
+    { "name": "button_edit", "value": "Edit" },
+    { "name": "button_delete", "value": "Delete" },
+    { "name": "button_cancel", "value": "Cancel" },
+    { "name": "button_export_report", "value": "Export Diagnostic Report" },
+    { "name": "button_confirm", "value": "Confirm" },
+
+    { "name": "section_current_connection", "value": "Current Connection" },
+    { "name": "section_diagnostics", "value": "Diagnostics" },
+    { "name": "section_configs", "value": "Configurations" },
+    { "name": "section_display", "value": "Display Info" },
+    { "name": "section_interface", "value": "Interface" },
+    { "name": "section_peer", "value": "Peer" },
+    { "name": "section_route_dns", "value": "Routing & DNS" },
+    { "name": "section_advanced", "value": "Advanced" },
+    { "name": "section_status", "value": "Status Summary" },
+    { "name": "section_traffic", "value": "Real-time Traffic" },
+    { "name": "section_route_info", "value": "Routing Info" },
+    { "name": "section_logs", "value": "Recent Logs" },
+
+    { "name": "field_name", "value": "Name" },
+    { "name": "field_private_key", "value": "PrivateKey" },
+    { "name": "field_public_key", "value": "PublicKey" },
+    { "name": "field_address", "value": "Address" },
+    { "name": "field_dns", "value": "DNS" },
+    { "name": "field_mtu", "value": "MTU" },
+    { "name": "field_endpoint_host", "value": "Server Address" },
+    { "name": "field_endpoint_port", "value": "Port" },
+    { "name": "field_allowed_ips", "value": "AllowedIPs" },
+    { "name": "field_keepalive", "value": "PersistentKeepalive" },
+    { "name": "field_preshared_key", "value": "PresharedKey" },
+    { "name": "field_endpoint", "value": "Endpoint" },
+
+    { "name": "route_global", "value": "Global Proxy" },
+    { "name": "route_lan_only", "value": "LAN Only" },
+    { "name": "route_custom", "value": "Custom Routing" },
+
+    { "name": "empty_config_title", "value": "No VPN Configurations" },
+    { "name": "empty_config_desc", "value": "You can import a WireGuard configuration via QR code, file, or clipboard." },
+
+    { "name": "dialog_reveal_key_title", "value": "Reveal Private Key?" },
+    { "name": "dialog_reveal_key_message", "value": "The private key controls this VPN identity. Do not screenshot, forward, or paste it into untrusted apps." },
+    { "name": "dialog_reveal_key_action", "value": "Reveal for 30s" },
+    { "name": "dialog_export_config_title", "value": "Export Configuration?" },
+    { "name": "dialog_export_config_message", "value": "The exported configuration contains the private key. Anyone with this file can use this tunnel." },
+    { "name": "dialog_delete_config_title", "value": "Delete Configuration?" },
+    { "name": "dialog_delete_config_message", "value": "This will delete the locally saved WireGuard configuration and key references. This action cannot be undone." },
+
+    { "name": "error_required", "value": "This field is required" },
+    { "name": "error_invalid_key", "value": "Invalid key format" },
+    { "name": "error_invalid_endpoint", "value": "Invalid server address or port" },
+    { "name": "error_invalid_cidr", "value": "Invalid CIDR format" },
+    { "name": "error_invalid_dns", "value": "Invalid DNS address" },
+    { "name": "error_invalid_mtu", "value": "Invalid MTU range (576-1500)" },
+    { "name": "error_parse_config", "value": "No valid WireGuard configuration recognized" },
+    { "name": "error_missing_private_key", "value": "Configuration missing private key" },
+    { "name": "error_missing_public_key", "value": "Configuration missing server public key" },
+    { "name": "error_empty_allowed_ips", "value": "No routing range configured; may not reach target network after connecting" },
+
+    { "name": "hint_handshake_never", "value": "Never handshaked" },
+    { "name": "hint_handshake_ago", "value": "Handshaked %ss ago" },
+    { "name": "hint_handshake_min_ago", "value": "Handshaked %smin ago" },
+    { "name": "hint_copied", "value": "Copied" },
+    { "name": "hint_clipboard_cleared", "value": "Please clear clipboard promptly" },
+    { "name": "hint_key_hidden", "value": "Set" },
+
+    { "name": "traffic_rx", "value": "Received" },
+    { "name": "traffic_tx", "value": "Sent" },
+    { "name": "traffic_total_rx", "value": "Total Received" },
+    { "name": "traffic_total_tx", "value": "Total Sent" },
+
+    { "name": "risk_global_proxy", "value": "This configuration will route all network traffic" },
+    { "name": "risk_global_proxy_v4", "value": "This configuration will route all IPv4 traffic" },
+    { "name": "risk_global_proxy_v6", "value": "This configuration will route all IPv6 traffic" },
+    { "name": "risk_no_dns", "value": "No DNS configured; may still use local DNS after connecting" },
+    { "name": "risk_no_keepalive", "value": "Keepalive may be needed in mobile/NAT environments" },
+    { "name": "risk_domain_endpoint", "value": "Domain will be resolved during connection" },
+    { "name": "risk_auto_mtu", "value": "Auto MTU or default value will be used" }
   ]
 }

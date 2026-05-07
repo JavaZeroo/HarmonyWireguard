@@ -1,16 +1,106 @@
 {
   "string": [
-    {
-      "name": "module_desc",
-      "value": "模块描述"
-    },
-    {
-      "name": "EntryAbility_desc",
-      "value": "description"
-    },
-    {
-      "name": "EntryAbility_label",
-      "value": "label"
-    }
+    { "name": "app_name", "value": "WireGuard" },
+
+    { "name": "page_home", "value": "WireGuard" },
+    { "name": "page_import_config", "value": "添加配置" },
+    { "name": "page_config_preview", "value": "导入预览" },
+    { "name": "page_config_edit", "value": "编辑配置" },
+    { "name": "page_tunnel_detail", "value": "连接详情" },
+    { "name": "page_settings", "value": "设置" },
+    { "name": "page_about", "value": "关于" },
+
+    { "name": "status_connected", "value": "已连接" },
+    { "name": "status_connecting", "value": "连接中" },
+    { "name": "status_disconnected", "value": "未连接" },
+    { "name": "status_failed", "value": "连接失败" },
+
+    { "name": "button_connect", "value": "连接" },
+    { "name": "button_disconnect", "value": "断开连接" },
+    { "name": "button_retry", "value": "重试" },
+    { "name": "button_detail", "value": "查看详情" },
+    { "name": "button_add_config", "value": "添加配置" },
+    { "name": "button_scan_qr", "value": "扫描二维码" },
+    { "name": "button_import_file", "value": "从文件导入" },
+    { "name": "button_import_clipboard", "value": "从剪贴板导入" },
+    { "name": "button_create_manual", "value": "手动创建" },
+    { "name": "button_save", "value": "保存" },
+    { "name": "button_edit", "value": "编辑" },
+    { "name": "button_delete", "value": "删除" },
+    { "name": "button_cancel", "value": "取消" },
+    { "name": "button_export_report", "value": "导出诊断报告" },
+    { "name": "button_confirm", "value": "确认" },
+
+    { "name": "section_current_connection", "value": "当前连接" },
+    { "name": "section_diagnostics", "value": "诊断" },
+    { "name": "section_configs", "value": "配置" },
+    { "name": "section_display", "value": "显示信息" },
+    { "name": "section_interface", "value": "Interface 本机接口" },
+    { "name": "section_peer", "value": "Peer 对端服务器" },
+    { "name": "section_route_dns", "value": "路由与 DNS" },
+    { "name": "section_advanced", "value": "高级设置" },
+    { "name": "section_status", "value": "状态摘要" },
+    { "name": "section_traffic", "value": "实时流量" },
+    { "name": "section_route_info", "value": "路由信息" },
+    { "name": "section_logs", "value": "最近日志" },
+
+    { "name": "field_name", "value": "配置名称" },
+    { "name": "field_private_key", "value": "PrivateKey" },
+    { "name": "field_public_key", "value": "PublicKey" },
+    { "name": "field_address", "value": "Address" },
+    { "name": "field_dns", "value": "DNS" },
+    { "name": "field_mtu", "value": "MTU" },
+    { "name": "field_endpoint_host", "value": "服务器地址" },
+    { "name": "field_endpoint_port", "value": "端口" },
+    { "name": "field_allowed_ips", "value": "AllowedIPs" },
+    { "name": "field_keepalive", "value": "PersistentKeepalive" },
+    { "name": "field_preshared_key", "value": "PresharedKey" },
+    { "name": "field_endpoint", "value": "Endpoint" },
+
+    { "name": "route_global", "value": "全局代理" },
+    { "name": "route_lan_only", "value": "仅访问内网" },
+    { "name": "route_custom", "value": "自定义路由" },
+
+    { "name": "empty_config_title", "value": "暂无 VPN 配置" },
+    { "name": "empty_config_desc", "value": "你可以通过二维码、配置文件或剪贴板导入 WireGuard 配置。" },
+
+    { "name": "dialog_reveal_key_title", "value": "显示私钥？" },
+    { "name": "dialog_reveal_key_message", "value": "私钥可用于控制此 VPN 身份。请勿截图、转发或粘贴到不可信应用。" },
+    { "name": "dialog_reveal_key_action", "value": "显示 30 秒" },
+    { "name": "dialog_export_config_title", "value": "导出配置？" },
+    { "name": "dialog_export_config_message", "value": "导出的配置包含私钥，任何获得该文件的人都可以使用此隧道。" },
+    { "name": "dialog_delete_config_title", "value": "删除配置？" },
+    { "name": "dialog_delete_config_message", "value": "此操作将删除本地保存的 WireGuard 配置和相关密钥引用，无法撤销。" },
+
+    { "name": "error_required", "value": "此项为必填项" },
+    { "name": "error_invalid_key", "value": "密钥格式不正确" },
+    { "name": "error_invalid_endpoint", "value": "服务器地址或端口格式不正确" },
+    { "name": "error_invalid_cidr", "value": "CIDR 格式不正确" },
+    { "name": "error_invalid_dns", "value": "DNS 地址格式不正确" },
+    { "name": "error_invalid_mtu", "value": "MTU 范围不正确（576-1500）" },
+    { "name": "error_parse_config", "value": "未识别到有效的 WireGuard 配置" },
+    { "name": "error_missing_private_key", "value": "配置缺少本机私钥" },
+    { "name": "error_missing_public_key", "value": "配置缺少服务器公钥" },
+    { "name": "error_empty_allowed_ips", "value": "未配置路由范围，连接后可能无法访问目标网络" },
+
+    { "name": "hint_handshake_never", "value": "从未握手" },
+    { "name": "hint_handshake_ago", "value": "%s秒前握手" },
+    { "name": "hint_handshake_min_ago", "value": "%s分钟前握手" },
+    { "name": "hint_copied", "value": "已复制" },
+    { "name": "hint_clipboard_cleared", "value": "请及时清空剪贴板" },
+    { "name": "hint_key_hidden", "value": "已设置" },
+
+    { "name": "traffic_rx", "value": "接收" },
+    { "name": "traffic_tx", "value": "发送" },
+    { "name": "traffic_total_rx", "value": "总接收" },
+    { "name": "traffic_total_tx", "value": "总发送" },
+
+    { "name": "risk_global_proxy", "value": "此配置会接管全部网络流量" },
+    { "name": "risk_global_proxy_v4", "value": "此配置会转发全部 IPv4 流量" },
+    { "name": "risk_global_proxy_v6", "value": "此配置会转发全部 IPv6 流量" },
+    { "name": "risk_no_dns", "value": "未配置 DNS，连接后可能仍使用本地 DNS" },
+    { "name": "risk_no_keepalive", "value": "移动网络/NAT 环境下可能需要 Keepalive" },
+    { "name": "risk_domain_endpoint", "value": "连接时会先解析域名" },
+    { "name": "risk_auto_mtu", "value": "将使用自动 MTU 或默认值" }
   ]
 }

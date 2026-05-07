@@ -27,12 +27,29 @@ interface WgNativeConfig {
   keepalive: number;
 }
 
-const DEFAULT_VPN_CONFIG = {
+interface IpAddress {
+  address: string;
+  family: number;
+}
+
+interface LinkAddressConfig {
+  address: IpAddress;
+  prefixLength: number;
+}
+
+interface DefaultVpnConfig {
+  ADDRESS: LinkAddressConfig;
+  DNS: string;
+  MTU: number;
+  KEEPALIVE: number;
+}
+
+const DEFAULT_VPN_CONFIG: DefaultVpnConfig = {
   ADDRESS: { address: { address: '10.0.0.2', family: 1 }, prefixLength: 24 },
   DNS: '8.8.8.8',
   MTU: 1420,
   KEEPALIVE: 25
-} as const;
+};
 
 export default class WireGuardVpnAbility extends VpnExtensionAbility {
   private vpnConnection: vpnExtension.VpnConnection | null = null;
