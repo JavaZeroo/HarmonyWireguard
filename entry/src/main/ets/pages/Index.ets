@@ -1,10 +1,10 @@
 import { vpnExtension } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { common, Want } from '@kit.AbilityKit';
-import { BusinessError } from '@kit.BasicServicesKit';
+import { BusinessError, commonEventManager } from '@kit.BasicServicesKit';
 import { router } from '@kit.ArkUI';
 import { configManager } from '../service/ConfigManager';
-import type { WgConfig, TunnelStatusType } from '../model/WgConfig';
+import type { WgConfig, TunnelStatusType, WgStatusPayload } from '../model/WgConfig';
 import { APP_CONSTANTS } from '../common/Constants';
 import { SPACING, TYPOGRAPHY, Breakpoint, getBreakpoint, getString } from '../common/DesignSystem';
 import { ConnectionHeroCard } from '../components/tunnel/ConnectionHeroCard';
@@ -52,6 +52,8 @@ struct Index {
   @State windowWidth: number = 360;
 
   private unsubscribe?: () => void;
+  private statusSubscriber: commonEventManager.CommonEventSubscriber | null = null;
+  private lastConnLogged: number = -1;
 
   aboutToAppear(): void {
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
@@ -70,12 +72,74 @@ struct Index {
         }
       }
     });
+
+    this.setupStatusSubscriber();
   }
 
   aboutToDisappear(): void {
     if (this.unsubscribe) {
       this.unsubscribe();
     }
+    this.teardownStatusSubscriber();
+  }
+
+  // 订阅扩展子进程回传的实时状态/流量事件，喂给 TunnelRuntimeService
+  private setupStatusSubscriber(): void {
+    if (this.statusSubscriber) {
+      return;
+    }
+    const info: commonEventManager.CommonEventSubscribeInfo = {
+      events: [APP_CONSTANTS.VPN_STATUS_EVENT]
+    };
+    commonEventManager.createSubscriber(info,
+      (err: BusinessError, subscriber: commonEventManager.CommonEventSubscriber) => {
+        if (err) {
+          hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'createSubscriber failed: %{public}d', err.code);
+          return;
+        }
+        this.statusSubscriber = subscriber;
+        commonEventManager.subscribe(subscriber,
+          (subErr: BusinessError, data: commonEventManager.CommonEventData) => {
+            if (subErr) {
+              return;
+            }
+            this.onStatusEvent(data);
+          });
+      });
+  }
+
+  private teardownStatusSubscriber(): void {
+    if (this.statusSubscriber) {
+      commonEventManager.unsubscribe(this.statusSubscriber);
+      this.statusSubscriber = null;
+    }
+  }
+
+  private onStatusEvent(data: commonEventManager.CommonEventData): void {
+    const params = data.parameters;
+    const body: string | undefined = data.data;
+    if (!params || !body) {
+      return;
+    }
+    const configId = params['configId'] as string;
+    if (!configId) {
+      return;
+    }
+    let payload: WgStatusPayload;
+    try {
+      payload = JSON.parse(body) as WgStatusPayload;
+    } catch (e) {
+      return;
+    }
+    // 只在连接态翻转时打点，避免每 1.5s 刷屏
+    const connFlag: number = payload.connected ? 1 : 0;
+    if (connFlag !== this.lastConnLogged) {
+      this.lastConnLogged = connFlag;
+      hilog.info(APP_CONSTANTS.DOMAIN, TAG,
+        'VPN status: connected=%{public}d ageSec=%{public}d rx=%{public}d tx=%{public}d',
+        connFlag, payload.handshakeAgeSec, payload.rxBytes, payload.txBytes);
+    }
+    tunnelRuntimeService.applyStatus(configId, payload);
   }
 
   onPageShow(): void {
@@ -122,9 +186,10 @@ struct Index {
           want.bundleName ?? '', want.moduleName ?? '', want.abilityName ?? '', config.id);
         await vpnExtension.startVpnExtensionAbility(want);
         this.activeConfigId = config.id;
-        this.activeStatus = 'connected';
-        tunnelRuntimeService.setStatus(config.id, 'connected');
-        hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'VPN started for %{public}s', config.name);
+        // 只代表"扩展已拉起"，真正的 connected 由扩展握手成功后经事件回传
+        this.activeStatus = 'connecting';
+        tunnelRuntimeService.setStatus(config.id, 'connecting');
+        hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'VPN extension started for %{public}s', config.name);
       } catch (err) {
         const e = err as BusinessError;
         const code = e?.code !== undefined ? String(e.code) : '?';

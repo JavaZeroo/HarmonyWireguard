@@ -19,6 +19,15 @@ static std::thread g_timerThread;
 static int32_t g_tunFd = -1;
 static int32_t g_udpFd = -1;
 
+// 累计收发字节（UDP 线路字节）。原子，供 GetTrafficStats 跨线程读取。
+static std::atomic<uint64_t> g_rxBytes{0};
+static std::atomic<uint64_t> g_txBytes{0};
+
+void GetTrafficStats(uint64_t *rxBytes, uint64_t *txBytes) {
+    if (rxBytes) *rxBytes = g_rxBytes.load(std::memory_order_relaxed);
+    if (txBytes) *txBytes = g_txBytes.load(std::memory_order_relaxed);
+}
+
 static void SetNonBlocking(int32_t fd) {
     if (fd < 0) return;
     int flags = fcntl(fd, F_GETFL, 0);
@@ -58,6 +67,7 @@ static bool SendHandshakeForPeer(struct wireguard_peer *peer) {
         WG_LOGE("Handshake send failed: errno=%{public}d", errno);
         return false;
     }
+    g_txBytes.fetch_add((uint64_t)s, std::memory_order_relaxed);
     WG_LOGI("Handshake initiation sent, %{public}zd bytes", s);
     return true;
 }
@@ -98,6 +108,7 @@ static void FlushKeepalives() {
         if (wg_encrypt_packet(peer, nullptr, 0, enc, &encLen)) {
             ssize_t s = UdpSocketSend(g_udpFd, enc, encLen);
             if (s > 0) {
+                g_txBytes.fetch_add((uint64_t)s, std::memory_order_relaxed);
                 WG_LOGI("Keepalive sent, %{public}zu bytes (initial=%{public}d)",
                         encLen, needInitial ? 1 : 0);
             } else {
@@ -154,6 +165,7 @@ static void TunToUdpThread() {
                 if (s < 0) {
                     WG_LOGE("UdpSocketSend error: %{public}d", errno);
                 } else {
+                    g_txBytes.fetch_add((uint64_t)s, std::memory_order_relaxed);
                     sent = true;
                     count++;
                     if (count <= 3) {
@@ -217,6 +229,7 @@ static void UdpToTunThread() {
             }
             continue;
         }
+        g_rxBytes.fetch_add((uint64_t)encLen, std::memory_order_relaxed);
 
         // 收到任何 UDP 包都打日志 —— 用于判断"包到底有没有从服务器回来"
         uint8_t msgType = encBuf[0];
@@ -274,6 +287,8 @@ int32_t StartPacketIO(int32_t tunFd, int32_t udpFd) {
 
     g_tunFd = tunFd;
     g_udpFd = udpFd;
+    g_rxBytes.store(0, std::memory_order_relaxed);
+    g_txBytes.store(0, std::memory_order_relaxed);
     SetNonBlocking(g_tunFd);
     SetNonBlocking(g_udpFd);
 

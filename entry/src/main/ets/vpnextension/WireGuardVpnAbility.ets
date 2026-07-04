@@ -1,6 +1,7 @@
 import { vpnExtension, VpnExtensionAbility, connection } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { wantAgent, Want } from '@kit.AbilityKit';
+import { commonEventManager, BusinessError } from '@kit.BasicServicesKit';
 import wgNative from 'libentry.so';
 import { APP_CONSTANTS } from '../common/Constants';
 import type { WgConfig } from '../model/WgConfig';
@@ -40,6 +41,8 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
   private vpnConnection: vpnExtension.VpnConnection | null = null;
   private tunFd: number = -1;
   private udpFd: number = -1;
+  private activeConfigId: string = '';
+  private statusTimer: number = -1;
 
   onCreate(want: Want): void {
     hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'WireGuardVpnAbility onCreate entry');
@@ -93,12 +96,16 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
       return;
     }
 
+    this.activeConfigId = wgConfig.id;
+
     this.startVpnConnection(wgConfig).then(() => {
       hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'startVpnConnection success');
+      this.startStatusBroadcast();
       return this.showForegroundNotification();
     }).catch((err: Error) => {
       hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'Failed to start VPN: %{public}s',
         err?.message ?? JSON.stringify(err) ?? '');
+      this.publishDisconnected('failed');
       this.destroyVpn();
     });
   }
@@ -174,6 +181,8 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
 
   onDestroy(): void {
     hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'WireGuardVpnAbility onDestroy');
+    this.stopStatusBroadcast();
+    this.publishDisconnected('disconnected');
     try {
       wgNative.stopVpn();
     } catch (err) {
@@ -181,6 +190,58 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
       hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'stopVpn error: %{public}s', msg);
     }
     this.destroyVpn();
+  }
+
+  // 定时把 native 的真实状态/流量经 commonEventManager 回传 UI 进程
+  private startStatusBroadcast(): void {
+    if (this.statusTimer !== -1) {
+      return;
+    }
+    this.statusTimer = setInterval(() => {
+      this.publishStatus();
+    }, 1500);
+    hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'status broadcast started');
+  }
+
+  private stopStatusBroadcast(): void {
+    if (this.statusTimer !== -1) {
+      clearInterval(this.statusTimer);
+      this.statusTimer = -1;
+    }
+  }
+
+  private publishStatus(): void {
+    let raw: string = '';
+    try {
+      raw = wgNative.getStatus();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      hilog.warn(APP_CONSTANTS.DOMAIN, TAG, 'getStatus failed: %{public}s', msg);
+      return;
+    }
+    if (!raw) {
+      return;
+    }
+    const params: Record<string, Object> = { 'configId': this.activeConfigId };
+    const options: commonEventManager.CommonEventPublishData = { data: raw, parameters: params };
+    commonEventManager.publish(APP_CONSTANTS.VPN_STATUS_EVENT, options, (err: BusinessError) => {
+      if (err && err.code) {
+        hilog.warn(APP_CONSTANTS.DOMAIN, TAG, 'publish status failed: %{public}d', err.code);
+      }
+    });
+  }
+
+  // 广播一次终态（disconnected / failed），让 UI 立即离开 connecting/connected
+  private publishDisconnected(state: string): void {
+    const payload: string =
+      '{"connected":false,"handshakeAgeSec":-1,"rxBytes":0,"txBytes":0,"state":"' + state + '"}';
+    const params: Record<string, Object> = { 'configId': this.activeConfigId };
+    const options: commonEventManager.CommonEventPublishData = { data: payload, parameters: params };
+    commonEventManager.publish(APP_CONSTANTS.VPN_STATUS_EVENT, options, (err: BusinessError) => {
+      if (err && err.code) {
+        hilog.warn(APP_CONSTANTS.DOMAIN, TAG, 'publish disconnected failed: %{public}d', err.code);
+      }
+    });
   }
 
   private async showForegroundNotification(): Promise<void> {

@@ -2,6 +2,8 @@ export interface AppConstants {
   DOMAIN: number;
   BUNDLE_NAME: string;
   VPN_ABILITY_NAME: string;
+  // 扩展进程 -> UI 进程回传实时状态/流量的自定义 commonEvent 名
+  VPN_STATUS_EVENT: string;
 }
 
 export interface DefaultConfig {
@@ -36,7 +38,8 @@ export interface ColorConstants {
 export const APP_CONSTANTS: AppConstants = {
   DOMAIN: 0xA001,
   BUNDLE_NAME: 'com.example.harmonywireguard',
-  VPN_ABILITY_NAME: 'WireGuardVpnAbility'
+  VPN_ABILITY_NAME: 'WireGuardVpnAbility',
+  VPN_STATUS_EVENT: 'com.example.harmonywireguard.VPN_STATUS'
 };
 
 export const DEFAULT_CONFIG: DefaultConfig = {

@@ -1,63 +1,103 @@
-import type { TunnelRuntimeState, TunnelStatusType } from '../model/WgConfig';
+import type { TunnelRuntimeState, TunnelStatusType, WgStatusPayload } from '../model/WgConfig';
 import { logService } from './LogService';
 
 class TunnelRuntimeService {
   private states: Map<string, TunnelRuntimeState> = new Map();
-  private timer: number = -1;
   private listeners: Set<(states: Map<string, TunnelRuntimeState>) => void> = new Set();
 
-  startMonitoring(): void {
-    if (this.timer !== -1) return;
-    this.timer = setInterval(() => {
-      this.updateStates();
-    }, 1000);
-  }
-
-  stopMonitoring(): void {
-    if (this.timer !== -1) {
-      clearInterval(this.timer);
-      this.timer = -1;
+  // 由 UI 侧（Index）在收到扩展进程的 commonEvent 后调用，写入真实状态/流量。
+  // payload 来自 native getStatus；configId 来自事件 parameters。
+  applyStatus(tunnelId: string, p: WgStatusPayload): void {
+    if (!tunnelId) {
+      return;
     }
-  }
+    const existing = this.states.get(tunnelId);
+    const now = Date.now();
 
-  private updateStates(): void {
-    for (const [id, state] of this.states) {
-      if (state.status === 'connected') {
-        state.rxBytes += Math.floor(Math.random() * 1024);
-        state.txBytes += Math.floor(Math.random() * 512);
-        state.rxSpeed = Math.floor(Math.random() * 50 * 1024);
-        state.txSpeed = Math.floor(Math.random() * 20 * 1024);
-        state.updatedAt = Date.now();
+    // 状态机：connected 真值优先；否则看终态字段；再否则视为握手中/重连中
+    let status: TunnelStatusType;
+    if (p.connected) {
+      status = 'connected';
+    } else if (p.state === 'failed') {
+      status = 'failed';
+    } else if (p.state === 'disconnected') {
+      status = 'disconnected';
+    } else {
+      status = 'connecting';
+    }
+
+    // 速率：仅在稳定 connected 且有上一拍基准时按字节差/时间差计算
+    let rxSpeed = 0;
+    let txSpeed = 0;
+    if (p.connected && existing && existing.status === 'connected') {
+      const dtMs = now - existing.updatedAt;
+      if (dtMs > 200) {
+        const dtSec = dtMs / 1000;
+        rxSpeed = Math.max(0, Math.floor((p.rxBytes - existing.rxBytes) / dtSec));
+        txSpeed = Math.max(0, Math.floor((p.txBytes - existing.txBytes) / dtSec));
+      } else {
+        rxSpeed = existing.rxSpeed || 0;
+        txSpeed = existing.txSpeed || 0;
       }
     }
+
+    // 上次握手绝对时间（unix 秒）= 现在 - 握手年龄；未握手则沿用旧值
+    const lastHandshakeAt = p.connected && p.handshakeAgeSec >= 0
+      ? Math.floor(now / 1000) - p.handshakeAgeSec
+      : existing?.lastHandshakeAt;
+
+    this.logTransition(tunnelId, existing, status);
+
+    this.states.set(tunnelId, {
+      tunnelId,
+      status,
+      rxBytes: p.rxBytes,
+      txBytes: p.txBytes,
+      rxSpeed,
+      txSpeed,
+      lastHandshakeAt,
+      latestError: status === 'failed' ? existing?.latestError : undefined,
+      updatedAt: now
+    });
+
     this.notifyListeners();
   }
 
+  // UI 侧主动设置的过渡态：点连接→connecting，点断开→disconnected，启动异常→failed
   setStatus(tunnelId: string, status: TunnelStatusType, error?: string): void {
     const existing = this.states.get(tunnelId);
     const now = Date.now();
 
-    if (status === 'connected' && (!existing || existing.status !== 'connected')) {
-      logService.addLog(tunnelId, 'info', '隧道已连接');
-    } else if (status === 'failed') {
-      logService.addLog(tunnelId, 'error', error || '连接失败');
-    } else if (status === 'disconnected' && existing && existing.status === 'connected') {
-      logService.addLog(tunnelId, 'info', '隧道已断开');
-    }
+    this.logTransition(tunnelId, existing, status, error);
 
     this.states.set(tunnelId, {
       tunnelId,
       status,
       rxBytes: existing?.rxBytes || 0,
       txBytes: existing?.txBytes || 0,
-      rxSpeed: existing?.rxSpeed || 0,
-      txSpeed: existing?.txSpeed || 0,
-      lastHandshakeAt: status === 'connected' ? Math.floor(now / 1000) : existing?.lastHandshakeAt,
+      rxSpeed: status === 'connected' ? (existing?.rxSpeed || 0) : 0,
+      txSpeed: status === 'connected' ? (existing?.txSpeed || 0) : 0,
+      lastHandshakeAt: existing?.lastHandshakeAt,
       latestError: error,
       updatedAt: now
     });
 
     this.notifyListeners();
+  }
+
+  private logTransition(
+    tunnelId: string,
+    existing: TunnelRuntimeState | undefined,
+    status: TunnelStatusType,
+    error?: string
+  ): void {
+    if (status === 'connected' && (!existing || existing.status !== 'connected')) {
+      logService.addLog(tunnelId, 'info', '隧道已连接');
+    } else if (status === 'failed' && (!existing || existing.status !== 'failed')) {
+      logService.addLog(tunnelId, 'error', error || '连接失败');
+    } else if (status === 'disconnected' && existing && existing.status === 'connected') {
+      logService.addLog(tunnelId, 'info', '隧道已断开');
+    }
   }
 
   getState(tunnelId: string): TunnelRuntimeState | undefined {

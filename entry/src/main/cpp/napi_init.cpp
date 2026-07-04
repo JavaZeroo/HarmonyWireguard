@@ -7,6 +7,7 @@
 #include "utils/logger.h"
 #include <string>
 #include <vector>
+#include <cstdio>
 #include <arpa/inet.h>
 
 static int32_t g_tunnelFd = -1;
@@ -155,12 +156,51 @@ static napi_value StopVpn(napi_env env, napi_callback_info info) {
     return result;
 }
 
+// NAPI: 查询实时状态与流量。扩展进程定时轮询后经 commonEventManager 回传 UI。
+// 返回 { connected:boolean, handshakeAgeSec:number(-1=未握手), rxBytes:number, txBytes:number }
+static napi_value GetStatus(napi_env env, napi_callback_info info) {
+    bool connected = false;
+    int64_t handshakeAgeSec = -1;  // -1 表示尚无成功握手
+
+    struct wireguard_device *dev = wg_get_device();
+    if (dev) {
+        for (int i = 0; i < WIREGUARD_MAX_PEERS; i++) {
+            struct wireguard_peer *peer = &dev->peers[i];
+            if (!peer->valid || !peer->active) continue;
+            if (peer->curr_keypair.valid) {
+                connected = true;
+                // 无符号毫秒差，回绕安全；keypair_millis 为当前会话建立时刻
+                uint32_t age = wireguard_sys_now() - peer->curr_keypair.keypair_millis;
+                handshakeAgeSec = static_cast<int64_t>(age / 1000);
+            }
+            break;  // 单 peer 场景，取第一个 active peer
+        }
+    }
+
+    uint64_t rx = 0, tx = 0;
+    GetTrafficStats(&rx, &tx);
+
+    // 返回 JSON 字符串，ETS 侧 JSON.parse 成强类型，避免 ESObject 动态取值
+    char json[256];
+    snprintf(json, sizeof(json),
+             "{\"connected\":%s,\"handshakeAgeSec\":%lld,\"rxBytes\":%llu,\"txBytes\":%llu}",
+             connected ? "true" : "false",
+             static_cast<long long>(handshakeAgeSec),
+             static_cast<unsigned long long>(rx),
+             static_cast<unsigned long long>(tx));
+
+    napi_value result;
+    napi_create_string_utf8(env, json, NAPI_AUTO_LENGTH, &result);
+    return result;
+}
+
 EXTERN_C_START
 static napi_value Init(napi_env env, napi_value exports) {
     napi_property_descriptor desc[] = {
         { "startVpn", nullptr, StartVpn, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "stopVpn", nullptr, StopVpn, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "udpConnect", nullptr, UdpConnect, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "getStatus", nullptr, GetStatus, nullptr, nullptr, nullptr, napi_default, nullptr },
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

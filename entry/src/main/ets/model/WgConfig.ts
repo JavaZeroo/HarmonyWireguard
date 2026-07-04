@@ -20,6 +20,15 @@ export interface WgStatus {
   lastHandshake: number;
 }
 
+// 扩展进程通过 commonEvent 回传的实时状态负载（native getStatus 的 JSON）
+export interface WgStatusPayload {
+  connected: boolean;
+  handshakeAgeSec: number;  // 距上次成功握手的秒数，-1 表示尚未握手
+  rxBytes: number;
+  txBytes: number;
+  state?: string;           // 仅终态时带：'disconnected' | 'failed'
+}
+
 export interface WgInterfaceConfig {
   privateKeyRef: string;
   publicKey?: string;
