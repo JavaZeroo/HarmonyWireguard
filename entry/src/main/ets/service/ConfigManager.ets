@@ -5,7 +5,8 @@ import type { WgConfig } from '../model/WgConfig';
 const TAG = 'ConfigManager';
 const PREF_NAME = 'wg_configs';
 const KEY_CONFIGS = 'configs';
-const DOMAIN = 0x0000;
+const KEY_ACTIVE_ID = 'active_config_id';
+const DOMAIN = 0xA001;
 
 class ConfigManager {
   private pref: preferences.Preferences | null = null;
@@ -93,6 +94,33 @@ class ConfigManager {
   getConfigById(id: string): WgConfig | undefined {
     if (!id) return undefined;
     return this.getAllConfigs().find(c => c.id === id);
+  }
+
+  // 把当前要连接的配置 id 写到 prefs —— 系统 VPN 授权对话框会丢掉 want.parameters，
+  // extension 启动后只能靠 prefs 拿到要用哪条配置
+  setActiveConfigId(id: string): void {
+    if (!this.pref) return;
+    try {
+      this.pref.putSync(KEY_ACTIVE_ID, id);
+      this.pref.flush();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      hilog.error(DOMAIN, TAG, 'Failed to set active id: %{public}s', msg);
+    }
+  }
+
+  getActiveConfigId(): string {
+    if (!this.pref) return '';
+    try {
+      return this.pref.getSync(KEY_ACTIVE_ID, '') as string;
+    } catch {
+      return '';
+    }
+  }
+
+  getActiveConfig(): WgConfig | undefined {
+    const id = this.getActiveConfigId();
+    return id ? this.getConfigById(id) : undefined;
   }
 }
 

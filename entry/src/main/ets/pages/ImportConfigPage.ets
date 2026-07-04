@@ -1,49 +1,140 @@
 import { router } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
+import { BusinessError, pasteboard } from '@kit.BasicServicesKit';
+import { picker, fileIo as fs } from '@kit.CoreFileKit';
+import { scanBarcode, scanCore } from '@kit.ScanKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+import { util } from '@kit.ArkTS';
 import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
-import { SectionCard } from '../components/common/SectionCard';
-import { ConfigParser } from '../service/ConfigParser';
+import { APP_CONSTANTS } from '../common/Constants';
+import { ConfigParser, ParseResult } from '../service/ConfigParser';
+
+const TAG = 'ImportConfigPage';
 
 @Entry
 @Component
 struct ImportConfigPage {
   @State isLoading: boolean = false;
 
-  private handleParseResult(result: import('../service/ConfigParser').ParseResult): void {
+  private toast(msg: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message: msg, duration: 2500 });
+    } catch (e) {
+      hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'toast failed: %{public}s', JSON.stringify(e) ?? '');
+    }
+  }
+
+  private getCtx(): common.UIAbilityContext {
+    return this.getUIContext().getHostContext() as common.UIAbilityContext;
+  }
+
+  private handleParseResult(result: ParseResult): void {
     if (result.success && result.config) {
       router.pushUrl({
         url: 'pages/ConfigPreviewPage',
         params: { config: result.config }
       });
     } else {
-      const msg = ConfigParser.resolveErrorMessage(result.error || $r('app.string.error_parse_config'));
-      try {
-        this.getUIContext().getPromptAction().showToast({ message: msg, duration: 3000 });
-      } catch {}
+      const msg = ConfigParser.resolveErrorMessage(result.error ?? $r('app.string.error_parse_config'));
+      this.toast(msg);
     }
   }
 
   private async importFromClipboard(): Promise<void> {
     this.isLoading = true;
     try {
-      this.getUIContext().getPromptAction().showToast({ message: getString($r('app.string.toast_clipboard_not_impl')), duration: 2000 });
-    } catch {}
-    this.isLoading = false;
+      const board = pasteboard.getSystemPasteboard();
+      const data = await board.getData();
+      if (!data || !data.hasType(pasteboard.MIMETYPE_TEXT_PLAIN)) {
+        this.toast(getString($r('app.string.error_parse_config')));
+        return;
+      }
+      const text = data.getPrimaryText();
+      if (!text || text.trim().length === 0) {
+        this.toast(getString($r('app.string.error_parse_config')));
+        return;
+      }
+      hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'clipboard text len=%{public}d', text.length);
+      this.handleParseResult(ConfigParser.parseFromText(text));
+    } catch (err) {
+      const e = err as BusinessError;
+      hilog.error(APP_CONSTANTS.DOMAIN, TAG,
+        'clipboard import error: code=%{public}d msg=%{public}s',
+        e?.code ?? -1, e?.message ?? String(err));
+      this.toast('剪贴板读取失败: ' + (e?.message ?? String(err)));
+    } finally {
+      this.isLoading = false;
+    }
   }
 
   private async importFromFile(): Promise<void> {
     this.isLoading = true;
     try {
-      this.getUIContext().getPromptAction().showToast({ message: getString($r('app.string.toast_file_not_impl')), duration: 2000 });
-    } catch {}
-    this.isLoading = false;
+      const documentPicker = new picker.DocumentViewPicker(this.getCtx());
+      const uris: string[] = await documentPicker.select({
+        maxSelectNumber: 1
+      });
+      if (!uris || uris.length === 0) {
+        return; // 用户取消，不弹错误
+      }
+      const uri = uris[0];
+      hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'picked uri=%{public}s', uri);
+
+      const file = fs.openSync(uri, fs.OpenMode.READ_ONLY);
+      try {
+        const stat = fs.statSync(file.fd);
+        const size = stat.size > 0 ? stat.size : 8192;
+        const buf = new ArrayBuffer(size);
+        const len = fs.readSync(file.fd, buf);
+        const decoder = util.TextDecoder.create('utf-8');
+        const text = decoder.decodeToString(new Uint8Array(buf, 0, len));
+        hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'file text len=%{public}d', text.length);
+
+        // 从 URI 末段截一个默认名
+        let name = '';
+        const slash = uri.lastIndexOf('/');
+        const base = slash >= 0 ? uri.substring(slash + 1) : uri;
+        const dot = base.lastIndexOf('.');
+        name = dot > 0 ? base.substring(0, dot) : base;
+
+        this.handleParseResult(ConfigParser.parseFromText(text, name));
+      } finally {
+        fs.closeSync(file);
+      }
+    } catch (err) {
+      const e = err as BusinessError;
+      hilog.error(APP_CONSTANTS.DOMAIN, TAG,
+        'file import error: code=%{public}d msg=%{public}s',
+        e?.code ?? -1, e?.message ?? String(err));
+      this.toast('文件读取失败: ' + (e?.message ?? String(err)));
+    } finally {
+      this.isLoading = false;
+    }
   }
 
   private async scanQRCode(): Promise<void> {
     this.isLoading = true;
     try {
-      this.getUIContext().getPromptAction().showToast({ message: getString($r('app.string.toast_qr_not_impl')), duration: 2000 });
-    } catch {}
-    this.isLoading = false;
+      const options: scanBarcode.ScanOptions = {
+        scanTypes: [scanCore.ScanType.QR_CODE],
+        enableMultiMode: false,
+        enableAlbum: true
+      };
+      const result = await scanBarcode.startScanForResult(this.getCtx(), options);
+      if (!result || !result.originalValue || result.originalValue.length === 0) {
+        return;
+      }
+      hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'qr text len=%{public}d', result.originalValue.length);
+      this.handleParseResult(ConfigParser.parseFromText(result.originalValue));
+    } catch (err) {
+      const e = err as BusinessError;
+      hilog.error(APP_CONSTANTS.DOMAIN, TAG,
+        'qr scan error: code=%{public}d msg=%{public}s',
+        e?.code ?? -1, e?.message ?? String(err));
+      this.toast('扫码失败: ' + (e?.message ?? String(err)));
+    } finally {
+      this.isLoading = false;
+    }
   }
 
   @Builder
@@ -131,14 +222,14 @@ struct ImportConfigPage {
             )
 
             this.ImportOptionCard(
-              $r('sys.symbol.folder'),
+              $r('sys.symbol.doc'),
               getString($r('app.string.button_import_file')),
               getString($r('app.string.desc_import_file')),
               () => this.importFromFile()
             )
 
             this.ImportOptionCard(
-              $r('sys.symbol.doc_text'),
+              $r('sys.symbol.doc'),
               getString($r('app.string.button_import_clipboard')),
               getString($r('app.string.desc_import_clipboard')),
               () => this.importFromClipboard()

@@ -1,6 +1,7 @@
 import { vpnExtension } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { common, Want } from '@kit.AbilityKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { router } from '@kit.ArkUI';
 import { configManager } from '../service/ConfigManager';
 import type { WgConfig, TunnelStatusType } from '../model/WgConfig';
@@ -16,83 +17,13 @@ import { TunnelDetailPanel } from '../components/tunnel/TunnelDetailPanel';
 
 const TAG = 'IndexPage';
 
-interface IpAddress {
-  address: string;
-  family: number;
-}
-
-interface VpnParamAddress {
-  address: IpAddress;
-  prefixLength: number;
-}
-
-interface VpnParamConfig {
-  addresses: VpnParamAddress[];
-  dnsAddresses: string[];
-  mtu: number;
-  serverIp: string;
-  serverPort: number;
-  wgPrivateKey: string;
-  wgPeerPublicKey: string;
-  wgPresharedKey: string;
-  wgKeepalive: number;
-}
-
-interface EndpointInfo {
-  serverIp: string;
-  serverPort: number;
-}
-
-function parseAddress(address: string): VpnParamAddress {
-  const parts = address.split('/');
-  const ip = parts[0];
-  const prefix = parts[1];
-  return {
-    address: { address: ip, family: 1 },
-    prefixLength: parseInt(prefix || '24')
-  };
-}
-
-function parseEndpoint(endpoint: string): EndpointInfo {
-  if (endpoint.startsWith('[')) {
-    const closingBracket = endpoint.indexOf(']');
-    if (closingBracket > 0) {
-      const ip = endpoint.substring(1, closingBracket);
-      const portPart = endpoint.substring(closingBracket + 1);
-      const port = portPart.startsWith(':') ? parseInt(portPart.substring(1)) : 51820;
-      return { serverIp: ip, serverPort: port };
-    }
-  }
-  const parts = endpoint.split(':');
-  const ip = parts[0];
-  const port = parts[1];
-  return {
-    serverIp: ip,
-    serverPort: parseInt(port || '51820')
-  };
-}
-
-function buildVpnParamConfig(config: WgConfig): VpnParamConfig {
-  const ep = parseEndpoint(config.endpoint);
-  return {
-    addresses: [parseAddress(config.address)],
-    dnsAddresses: config.dns ? config.dns.split(',').map(s => s.trim()).filter(s => s.length > 0) : ['8.8.8.8'],
-    mtu: config.mtu || 1420,
-    serverIp: ep.serverIp,
-    serverPort: ep.serverPort,
-    wgPrivateKey: config.privateKey,
-    wgPeerPublicKey: config.peerPublicKey,
-    wgPresharedKey: config.presharedKey,
-    wgKeepalive: config.persistentKeepalive || 25
-  };
-}
-
 function createWant(config: WgConfig): Want {
   return {
     deviceId: '',
     bundleName: APP_CONSTANTS.BUNDLE_NAME,
+    moduleName: 'entry',
     abilityName: APP_CONSTANTS.VPN_ABILITY_NAME,
-    parameters: { config: JSON.stringify(buildVpnParamConfig(config)) }
+    parameters: { wgConfig: JSON.stringify(config) }
   };
 }
 
@@ -100,6 +31,7 @@ function createStopWant(): Want {
   return {
     deviceId: '',
     bundleName: APP_CONSTANTS.BUNDLE_NAME,
+    moduleName: 'entry',
     abilityName: APP_CONSTANTS.VPN_ABILITY_NAME
   };
 }
@@ -146,6 +78,11 @@ struct Index {
     }
   }
 
+  onPageShow(): void {
+    // 从导入/编辑页 router.back() 回来时刷新列表
+    this.loadConfigs();
+  }
+
   private updateBreakpoint(): void {
     try {
       this.windowWidth = AppStorage.get<number>('windowWidth') ?? 360;
@@ -170,21 +107,32 @@ struct Index {
   }
 
   async toggleVpn(config: WgConfig, enable: boolean): Promise<void> {
+    hilog.info(APP_CONSTANTS.DOMAIN, TAG,
+      '>>> toggleVpn[v3] config=%{public}s enable=%{public}s',
+      config.name, String(enable));
     if (enable) {
       this.connectingId = config.id;
       this.activeStatus = 'connecting';
       try {
+        // 系统 VPN 授权对话框会丢掉 want.parameters，所以把要用的配置 id 写到 prefs
+        configManager.setActiveConfigId(config.id);
         const want = createWant(config);
+        hilog.info(APP_CONSTANTS.DOMAIN, TAG,
+          'startVpnExtensionAbility: bundle=%{public}s module=%{public}s ability=%{public}s configId=%{public}s',
+          want.bundleName ?? '', want.moduleName ?? '', want.abilityName ?? '', config.id);
         await vpnExtension.startVpnExtensionAbility(want);
         this.activeConfigId = config.id;
         this.activeStatus = 'connected';
         tunnelRuntimeService.setStatus(config.id, 'connected');
         hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'VPN started for %{public}s', config.name);
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
+        const e = err as BusinessError;
+        const code = e?.code !== undefined ? String(e.code) : '?';
+        const msg = e?.message ?? String(err);
         this.activeStatus = 'failed';
         tunnelRuntimeService.setStatus(config.id, 'failed', msg);
-        hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'Failed to start VPN: %{public}s', msg);
+        hilog.error(APP_CONSTANTS.DOMAIN, TAG,
+          'Failed to start VPN: code=%{public}s msg=%{public}s', code, msg);
       }
       this.connectingId = '';
     } else {

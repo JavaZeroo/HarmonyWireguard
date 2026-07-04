@@ -12,7 +12,7 @@
 
 #undef LOG_DOMAIN
 #undef LOG_TAG
-#define LOG_DOMAIN 0x0000
+#define LOG_DOMAIN 0xA001
 #define LOG_TAG "WGPlatform"
 
 #define PLAT_LOGI(fmt, ...) OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "[%{public}s %{public}d] " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__)

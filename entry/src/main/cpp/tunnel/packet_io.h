@@ -3,11 +3,14 @@
 
 #include <cstdint>
 
-// 启动数据泵：tunFd <-> udpFd 双向转发
-// 目前 Phase 2 为 UDP 透传，Phase 3 接入 WireGuard 加密
+// 启动数据泵：tunFd <-> udpFd 双向转发，并启动 WireGuard 定时器线程
 int32_t StartPacketIO(int32_t tunFd, int32_t udpFd);
 
 // 停止数据泵
 void StopPacketIO();
+
+// 主动为设备上所有 active 的 peer 发起一次握手
+// 用于刚配置完 peer 时立即建立会话，而不等待第一笔出口流量
+void KickInitialHandshake();
 
 #endif // PACKET_IO_H

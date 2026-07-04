@@ -34,7 +34,7 @@ export interface ColorConstants {
 }
 
 export const APP_CONSTANTS: AppConstants = {
-  DOMAIN: 0x0000,
+  DOMAIN: 0xA001,
   BUNDLE_NAME: 'com.example.harmonywireguard',
   VPN_ABILITY_NAME: 'WireGuardVpnAbility'
 };

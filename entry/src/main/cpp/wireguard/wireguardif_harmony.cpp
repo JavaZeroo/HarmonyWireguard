@@ -11,7 +11,7 @@
 
 // 日志宏（避免依赖外部头文件路径问题）
 #include <hilog/log.h>
-#define HARMONY_WG_LOGI(fmt, ...) OH_LOG_Print(LOG_APP, LOG_INFO, 0x0000, "WireGuard", fmt, ##__VA_ARGS__)
+#define HARMONY_WG_LOGI(fmt, ...) OH_LOG_Print(LOG_APP, LOG_INFO, 0xA001, "WireGuard", fmt, ##__VA_ARGS__)
 
 static struct wireguard_device g_device;
 static bool g_device_inited = false;
@@ -93,8 +93,10 @@ int wg_process_packet(const uint8_t *packet_in, size_t packet_len, uint8_t *dst,
             struct wireguard_peer *peer = peer_lookup_by_handshake(&g_device, msg.receiver);
             if (!peer) return -1;
             if (wireguard_process_handshake_response(&g_device, peer, &msg)) {
-                wireguard_start_session(peer, false);
-                HARMONY_WG_LOGI("Handshake response processed, session started");
+                // 我们是发起方(initiator)——收到响应后必须以 initiator=true 建会话，
+                // 否则 KDF2 会把 sending/receiving key 派生反，且会话被放进 next_keypair 而非 curr。
+                wireguard_start_session(peer, true);
+                HARMONY_WG_LOGI("Handshake response processed, session started (initiator)");
                 return 0;
             }
             return -1;
@@ -108,12 +110,13 @@ int wg_process_packet(const uint8_t *packet_in, size_t packet_len, uint8_t *dst,
 
         case MESSAGE_TRANSPORT_DATA: {
             if (packet_len < sizeof(struct message_transport_data) + 16) return -1;
-            uint32_t receiver = ((uint32_t)packet_in[4] << 24) | ((uint32_t)packet_in[5] << 16) |
-                                ((uint32_t)packet_in[6] << 8) | (uint32_t)packet_in[7];
-            uint64_t counter = ((uint64_t)packet_in[8] << 56) | ((uint64_t)packet_in[9] << 48) |
-                               ((uint64_t)packet_in[10] << 40) | ((uint64_t)packet_in[11] << 32) |
-                               ((uint64_t)packet_in[12] << 24) | ((uint64_t)packet_in[13] << 16) |
-                               ((uint64_t)packet_in[14] << 8) | (uint64_t)packet_in[15];
+            // WireGuard 线格式的 receiver 索引与 counter 都是【小端】。
+            // receiver 要与我方 local_index(本机字节序)比对，counter 是 AEAD nonce，
+            // 二者都必须按小端读取——之前用大端手工解析在小端 ARM 上必然匹配/解密失败。
+            const struct message_transport_data *data =
+                reinterpret_cast<const struct message_transport_data *>(packet_in);
+            uint32_t receiver = data->receiver;
+            uint64_t counter = U8TO64_LITTLE(data->counter);
 
             struct wireguard_peer *peer = peer_lookup_by_receiver(&g_device, receiver);
             if (!peer) return -1;
@@ -140,34 +143,52 @@ int wg_process_packet(const uint8_t *packet_in, size_t packet_len, uint8_t *dst,
     }
 }
 
-// 加密数据包
+// 加密数据包（允许 src_len=0，用于 keepalive 空包）
 bool wg_encrypt_packet(struct wireguard_peer *peer, const uint8_t *src, size_t src_len, uint8_t *dst, size_t *dst_len)
 {
-    if (!peer || !g_device_inited || src_len == 0) return false;
+    if (!peer || !g_device_inited) return false;
 
+    // 优先 curr_keypair；若无效，尝试 next_keypair（刚握手完成尚未提升）；最后 prev_keypair
     struct wireguard_keypair *keypair = &peer->curr_keypair;
+    bool using_next = false;
     if (!keypair->valid || !keypair->sending_valid) {
-        keypair = &peer->prev_keypair;
-        if (!keypair->valid || !keypair->sending_valid) {
-            return false;
+        keypair = &peer->next_keypair;
+        if (keypair->valid && keypair->sending_valid) {
+            using_next = true;
+        } else {
+            keypair = &peer->prev_keypair;
+            if (!keypair->valid || !keypair->sending_valid) {
+                return false;
+            }
         }
     }
 
-    size_t total_len = sizeof(struct message_transport_data) - WIREGUARD_AUTHTAG_LEN + src_len + WIREGUARD_AUTHTAG_LEN;
+    // 完整 transport data 包 = header(16) + 密文(src_len) + Poly1305 认证标签(16)
+    size_t total_len = sizeof(struct message_transport_data) + src_len + WIREGUARD_AUTHTAG_LEN;
     if (*dst_len < total_len) return false;
 
     struct message_transport_data *msg = (struct message_transport_data *)dst;
     msg->type = MESSAGE_TRANSPORT_DATA;
     memset(msg->reserved, 0, 3);
     msg->receiver = keypair->remote_index;
+    // 包内 counter 必须 = 加密用的 nonce（即递增前的值）
     U64TO8_LITTLE(msg->counter, keypair->sending_counter);
 
+    // wireguard_encrypt_packet 内部已经 sending_counter++，这里不要再自增（否则双重递增）
     wireguard_encrypt_packet(msg->enc_packet, src, src_len, keypair);
 
-    keypair->sending_counter++;
     keypair->last_tx = wireguard_sys_now();
     peer->last_tx = wireguard_sys_now();
     *dst_len = total_len;
+
+    // 用 next_keypair 成功加密一笔 -> 提升 next 为 curr，原 curr 变 prev
+    if (using_next) {
+        memset(&peer->prev_keypair, 0, sizeof(peer->prev_keypair));
+        peer->prev_keypair = peer->curr_keypair;
+        peer->curr_keypair = peer->next_keypair;
+        memset(&peer->next_keypair, 0, sizeof(peer->next_keypair));
+        HARMONY_WG_LOGI("Keypair promoted: next -> curr");
+    }
     return true;
 }
 
@@ -181,8 +202,9 @@ void wg_timer_tick(void)
         struct wireguard_peer *peer = &g_device.peers[i];
         if (!peer->valid) continue;
 
-        // 1. 如果 peer 没有有效会话且 active，尝试发送握手
-        if (peer->active && !peer->curr_keypair.valid) {
+        // 1. 如果 peer 没有任何有效会话(curr/next 都无效)且 active，尝试发送握手
+        //    next_keypair 有效说明刚握手完成，等首个数据包提升即可，无需重复握手
+        if (peer->active && !peer->curr_keypair.valid && !peer->next_keypair.valid) {
             if (wireguard_expired(peer->last_initiation_tx, REKEY_TIMEOUT)) {
                 peer->send_handshake = true;
             }
@@ -196,12 +218,8 @@ void wg_timer_tick(void)
             }
         }
 
-        // 3. keepalive
-        if (peer->keepalive_interval > 0 && peer->curr_keypair.valid) {
-            if (wireguard_expired(peer->last_tx, peer->keepalive_interval)) {
-                peer->send_handshake = true; // 用空数据包作为 keepalive
-            }
-        }
+        // 注意：keepalive 不在这里处理。keepalive 是【加密的空数据包】，不是新握手；
+        // 由 packet_io.cpp 的 FlushKeepalives() 直接用 wg_encrypt_packet 发送。
     }
 }
 

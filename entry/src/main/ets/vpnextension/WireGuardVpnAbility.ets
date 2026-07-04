@@ -1,22 +1,31 @@
-import { vpnExtension, VpnExtensionAbility } from '@kit.NetworkKit';
+import { vpnExtension, VpnExtensionAbility, connection } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { wantAgent, Want } from '@kit.AbilityKit';
 import wgNative from 'libentry.so';
 import { APP_CONSTANTS } from '../common/Constants';
+import type { WgConfig } from '../model/WgConfig';
+import { buildVpnConfig, parseEndpoint } from '../common/VpnConfigBuilder';
+import { configManager } from '../service/ConfigManager';
+
+const IPV4_PATTERN = /^\d+\.\d+\.\d+\.\d+$/;
+
+async function resolveHostToIPv4(host: string): Promise<string> {
+  if (IPV4_PATTERN.test(host)) {
+    return host;
+  }
+  const addresses = await connection.getAddressesByName(host);
+  if (!addresses || addresses.length === 0) {
+    throw new Error('DNS returned no records for ' + host);
+  }
+  for (const a of addresses) {
+    if (a.address && !a.address.includes(':')) {
+      return a.address;
+    }
+  }
+  throw new Error('No IPv4 record for ' + host);
+}
 
 const TAG = 'WireGuardVpnAbility';
-
-interface VpnParamConfig {
-  addresses: vpnExtension.LinkAddress[];
-  dnsAddresses: string[];
-  mtu: number;
-  serverIp: string;
-  serverPort: number;
-  wgPrivateKey: string;
-  wgPeerPublicKey: string;
-  wgPresharedKey: string;
-  wgKeepalive: number;
-}
 
 interface WgNativeConfig {
   privateKey: string;
@@ -27,125 +36,169 @@ interface WgNativeConfig {
   keepalive: number;
 }
 
-interface IpAddress {
-  address: string;
-  family: number;
-}
-
-interface LinkAddressConfig {
-  address: IpAddress;
-  prefixLength: number;
-}
-
-interface DefaultVpnConfig {
-  ADDRESS: LinkAddressConfig;
-  DNS: string;
-  MTU: number;
-  KEEPALIVE: number;
-}
-
-const DEFAULT_VPN_CONFIG: DefaultVpnConfig = {
-  ADDRESS: { address: { address: '10.0.0.2', family: 1 }, prefixLength: 24 },
-  DNS: '8.8.8.8',
-  MTU: 1420,
-  KEEPALIVE: 25
-};
-
 export default class WireGuardVpnAbility extends VpnExtensionAbility {
   private vpnConnection: vpnExtension.VpnConnection | null = null;
   private tunFd: number = -1;
+  private udpFd: number = -1;
 
-  async onCreate(want: Want): Promise<void> {
-    hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'WireGuardVpnAbility onCreate');
-    this.vpnConnection = vpnExtension.createVpnConnection(this.context);
-
-    try {
-      const config = this.parseConfig(want);
-      await this.startVpnConnection(config);
-      await this.showForegroundNotification();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'Failed to start VPN: %{public}s', msg);
-      this.destroyVpn();
-      throw new Error(msg);
+  onCreate(want: Want): void {
+    hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'WireGuardVpnAbility onCreate entry');
+    super.onCreate(want);
+    if (this.context) {
+      this.vpnConnection = vpnExtension.createVpnConnection(this.context);
+      hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'VpnConnection created');
+    } else {
+      hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'Context is invalid in onCreate');
+      return;
     }
+
+    this.loadConfigAndStart(want);
   }
 
-  private parseConfig(want: Want): VpnParamConfig {
-    const configStr = want.parameters?.['config'] as string;
-    if (!configStr) {
-      throw new Error('VPN config not found in want parameters');
-    }
-    
+  // 系统 VPN 授权对话框会用空 want 二次拉起本 extension，want.parameters 全丢
+  // 所以走 prefs 兜底：UI 调 startVpnExtensionAbility 之前已经写入了 active config id
+  private loadConfigAndStart(want: Want): void {
+    let wgConfig: WgConfig | undefined;
+
+    // 路径 A：want.parameters 里有 wgConfig JSON（直接调用、未经对话框时）
     try {
-      return JSON.parse(configStr) as VpnParamConfig;
+      const fromWant = this.parseConfig(want);
+      if (fromWant) {
+        wgConfig = fromWant;
+        hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'Loaded config from want.parameters');
+      }
+    } catch (err) {
+      hilog.info(APP_CONSTANTS.DOMAIN, TAG,
+        'want.parameters has no wgConfig, fallback to prefs');
+    }
+
+    // 路径 B：从 prefs 读 active config id
+    if (!wgConfig) {
+      try {
+        configManager.init(this.context);
+        wgConfig = configManager.getActiveConfig();
+        if (wgConfig) {
+          hilog.info(APP_CONSTANTS.DOMAIN, TAG,
+            'Loaded config from prefs: id=%{public}s', wgConfig.id);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'prefs load failed: %{public}s', msg);
+      }
+    }
+
+    if (!wgConfig) {
+      hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'No config found in want or prefs');
+      this.destroyVpn();
+      return;
+    }
+
+    this.startVpnConnection(wgConfig).then(() => {
+      hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'startVpnConnection success');
+      return this.showForegroundNotification();
+    }).catch((err: Error) => {
+      hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'Failed to start VPN: %{public}s',
+        err?.message ?? JSON.stringify(err) ?? '');
+      this.destroyVpn();
+    });
+  }
+
+  private parseConfig(want: Want): WgConfig {
+    const configStr = want.parameters?.['wgConfig'] as string;
+    if (!configStr) {
+      throw new Error('VPN config not found in want.parameters.wgConfig');
+    }
+    try {
+      return JSON.parse(configStr) as WgConfig;
     } catch {
       throw new Error('Invalid VPN config JSON');
     }
   }
 
-  private async startVpnConnection(config: VpnParamConfig): Promise<void> {
+  private async startVpnConnection(wg: WgConfig): Promise<void> {
+    const endpoint = parseEndpoint(wg.endpoint);
+    hilog.info(APP_CONSTANTS.DOMAIN, TAG,
+      'Starting VPN endpoint=%{public}s:%{public}d', endpoint.serverIp, endpoint.serverPort);
+
+    // 0. 主机名解析为 IPv4 —— native 层 inet_addr 只认点分十进制
+    let resolvedIp: string;
+    try {
+      resolvedIp = await resolveHostToIPv4(endpoint.serverIp);
+      if (resolvedIp !== endpoint.serverIp) {
+        hilog.info(APP_CONSTANTS.DOMAIN, TAG,
+          'Resolved %{public}s -> %{public}s', endpoint.serverIp, resolvedIp);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error('DNS resolution failed: ' + msg);
+    }
+
     // 1. 建立 UDP socket
-    const socketFd: number = wgNative.udpConnect(config.serverIp, config.serverPort);
+    const socketFd: number = wgNative.udpConnect(resolvedIp, endpoint.serverPort);
     if (socketFd < 0) {
       throw new Error('Failed to create UDP socket');
     }
+    this.udpFd = socketFd;
     hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'UDP socket created: %{public}d', socketFd);
 
     // 2. protect socket，避免流量回环
     await this.vpnConnection!.protect(socketFd);
     hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'socket protected: %{public}d', socketFd);
 
-    // 3. 构建 VpnConfig
-    const vpnConfig: vpnExtension.VpnConfig = {
-      addresses: config.addresses || [DEFAULT_VPN_CONFIG.ADDRESS],
-      dnsAddresses: config.dnsAddresses || [DEFAULT_VPN_CONFIG.DNS],
-      mtu: config.mtu || DEFAULT_VPN_CONFIG.MTU,
-      isIPv4Accepted: true,
-      isIPv6Accepted: false,
-      isBlocking: false
-    };
+    // 3. 构建 VpnConfig —— 不带 routes 字段，让系统按默认策略
+    const vpnConfig = buildVpnConfig(wg);
+    hilog.info(APP_CONSTANTS.DOMAIN, TAG,
+      'VpnConfig built: addresses=%{public}d, routes=%{public}d, mtu=%{public}d',
+      vpnConfig.addresses.length, vpnConfig.routes?.length ?? 0, vpnConfig.mtu ?? 0);
 
     // 4. 创建 VPN 连接，获取 TUN fd
     this.tunFd = await this.vpnConnection!.create(vpnConfig);
-    hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'VPN created, tunFd: %{public}d', this.tunFd);
+    hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'VPN created, tunFd=%{public}d', this.tunFd);
 
     // 5. 启动 Native 层 WireGuard + 数据转发
-    const wgConfig: WgNativeConfig = {
-      privateKey: config.wgPrivateKey || '',
-      peerPublicKey: config.wgPeerPublicKey || '',
-      presharedKey: config.wgPresharedKey || '',
-      endpointIp: config.serverIp,
-      endpointPort: config.serverPort,
-      keepalive: config.wgKeepalive || DEFAULT_VPN_CONFIG.KEEPALIVE
+    const nativeConfig: WgNativeConfig = {
+      privateKey: wg.privateKey || '',
+      peerPublicKey: wg.peerPublicKey || '',
+      presharedKey: wg.presharedKey || '',
+      endpointIp: resolvedIp,
+      endpointPort: endpoint.serverPort,
+      keepalive: wg.persistentKeepalive || 25
     };
-    
-    const ret: number = wgNative.startVpn(this.tunFd, socketFd, wgConfig);
-    hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'Native startVpn result: %{public}d', ret);
+
+    const ret: number = wgNative.startVpn(this.tunFd, socketFd, nativeConfig);
+    hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'Native startVpn result=%{public}d', ret);
+    if (ret < 0) {
+      throw new Error('Native startVpn failed: ' + ret);
+    }
   }
 
   onDestroy(): void {
     hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'WireGuardVpnAbility onDestroy');
-    wgNative.stopVpn();
+    try {
+      wgNative.stopVpn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'stopVpn error: %{public}s', msg);
+    }
     this.destroyVpn();
   }
 
   private async showForegroundNotification(): Promise<void> {
     try {
       const wantAgentInfo: wantAgent.WantAgentInfo = {
-        wants: [{ 
-          deviceId: '', 
-          bundleName: APP_CONSTANTS.BUNDLE_NAME, 
-          abilityName: 'EntryAbility' 
+        wants: [{
+          deviceId: '',
+          bundleName: APP_CONSTANTS.BUNDLE_NAME,
+          abilityName: 'EntryAbility'
         }],
         operationType: wantAgent.OperationType.START_ABILITY,
         requestCode: 0
       };
       const agent = await wantAgent.getWantAgent(wantAgentInfo);
-      hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'Foreground notification prepared, agent=%{public}s', JSON.stringify(agent));
+      hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'Foreground wantAgent ready: %{public}s', JSON.stringify(agent));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'Failed to show notification: %{public}s', msg);
+      hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'Failed to prepare notification: %{public}s', msg);
     }
   }
 
@@ -157,5 +210,6 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
       this.vpnConnection = null;
     }
     this.tunFd = -1;
+    this.udpFd = -1;
   }
 }

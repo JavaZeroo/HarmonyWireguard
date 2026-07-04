@@ -1,6 +1,7 @@
 #include "napi/native_api.h"
 #include "tunnel/packet_io.h"
 #include "tunnel/udp_socket.h"
+#include "wireguard/wireguard.h"
 #include "wireguard/wireguardif_harmony.h"
 #include "utils/base64.h"
 #include "utils/logger.h"
@@ -59,7 +60,8 @@ static napi_value StartVpn(napi_env env, napi_callback_info info) {
     WG_LOGI("StartVpn: tunFd=%{public}d, socketFd=%{public}d", tunFd, socketFd);
     if (socketFd < 0 && g_tunnelFd >= 0) socketFd = g_tunnelFd;
 
-    // 如果有 config 参数，解析并初始化 WireGuard
+    bool peerConfigured = false;
+
     if (argc > 2 && args[2] != nullptr) {
         std::string privateKeyB64, peerPubKeyB64, presharedKeyB64;
         std::string endpointIp;
@@ -80,38 +82,63 @@ static napi_value StartVpn(napi_env env, napi_callback_info info) {
             napi_get_value_int32(env, val, &keepalive);
         }
 
-        // Base64 解码密钥
         uint8_t privateKey[32] = {0};
         uint8_t peerPubKey[32] = {0};
         uint8_t presharedKey[32] = {0};
         size_t keyLen = 32;
 
-        Base64Decode(privateKeyB64.c_str(), privateKey, &keyLen);
-        keyLen = 32;
-        Base64Decode(peerPubKeyB64.c_str(), peerPubKey, &keyLen);
+        WG_LOGI("Key strings received: priv.len=%{public}zu peer.len=%{public}zu psk.len=%{public}zu",
+                privateKeyB64.size(), peerPubKeyB64.size(), presharedKeyB64.size());
 
-        // 初始化 WireGuard 设备
+        bool priv_ok = Base64Decode(privateKeyB64.c_str(), privateKey, &keyLen);
+        WG_LOGI("priv Base64Decode: ok=%{public}d len=%{public}zu first4=%{public}02x%{public}02x%{public}02x%{public}02x",
+                priv_ok, keyLen, privateKey[0], privateKey[1], privateKey[2], privateKey[3]);
+
+        keyLen = 32;
+        bool peer_ok = Base64Decode(peerPubKeyB64.c_str(), peerPubKey, &keyLen);
+        WG_LOGI("peer Base64Decode: ok=%{public}d len=%{public}zu first4=%{public}02x%{public}02x%{public}02x%{public}02x last4=%{public}02x%{public}02x%{public}02x%{public}02x",
+                peer_ok, keyLen,
+                peerPubKey[0], peerPubKey[1], peerPubKey[2], peerPubKey[3],
+                peerPubKey[28], peerPubKey[29], peerPubKey[30], peerPubKey[31]);
+
+        if (!priv_ok || !peer_ok || keyLen != 32) {
+            WG_LOGE("KEY DECODE FAILED — handshake will be invalid. priv_ok=%{public}d peer_ok=%{public}d peer_len=%{public}zu",
+                    priv_ok, peer_ok, keyLen);
+        }
+
+        if (!presharedKeyB64.empty()) {
+            keyLen = 32;
+            Base64Decode(presharedKeyB64.c_str(), presharedKey, &keyLen);
+        }
+
         if (!wg_device_init(privateKey)) {
             WG_LOGE("Failed to init WireGuard device");
             napi_value result; napi_create_int32(env, -1, &result); return result;
         }
 
-        // 添加 Peer
         struct wireguard_peer *peer = wg_add_peer(peerPubKey, presharedKeyB64.empty() ? nullptr : presharedKey);
         if (!peer) {
             WG_LOGE("Failed to add peer");
             napi_value result; napi_create_int32(env, -1, &result); return result;
         }
 
-        // 设置 Endpoint
         uint32_t ip = inet_addr(endpointIp.c_str());
         wg_set_peer_endpoint(peer, ip, static_cast<uint16_t>(endpointPort));
         wg_set_peer_keepalive(peer, static_cast<uint16_t>(keepalive));
+        peerConfigured = true;
 
         WG_LOGI("WireGuard configured, endpoint=%{public}s:%{public}d", endpointIp.c_str(), endpointPort);
     }
 
     int32_t ret = StartPacketIO(tunFd, socketFd);
+    if (ret != 0) {
+        napi_value result; napi_create_int32(env, ret, &result); return result;
+    }
+
+    // 主动发起首次握手，不等待出口流量触发
+    if (peerConfigured) {
+        KickInitialHandshake();
+    }
 
     napi_value result;
     napi_create_int32(env, ret, &result);
