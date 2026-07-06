@@ -50,6 +50,8 @@ struct SettingsPage {
     }
     .width('100%')
     .height(48)
+    .borderRadius(RADIUS.sm)
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(onClick)
   }
 

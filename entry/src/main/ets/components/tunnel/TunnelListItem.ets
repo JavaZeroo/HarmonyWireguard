@@ -138,6 +138,7 @@ export struct TunnelListItem {
       offsetX: SHADOW.sm.offsetX,
       offsetY: SHADOW.sm.offsetY
     })
+    .hoverEffect(HoverEffect.Scale)
     .onClick(() => {
       this.onSelect?.();
     })

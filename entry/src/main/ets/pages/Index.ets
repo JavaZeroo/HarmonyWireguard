@@ -388,6 +388,7 @@ struct Index {
         .borderRadius(28)
         .shadow({ radius: 8, color: 'rgba(0,0,0,0.20)', offsetY: 4 })
         .margin({ right: SPACING.md, bottom: SPACING.lg })
+        .hoverEffect(HoverEffect.Scale)
         .onClick(() => {
           router.pushUrl({ url: 'pages/ImportConfigPage' });
         })
