@@ -22,6 +22,7 @@ export struct ConfigPreviewPage {
     endpoint: '',
     persistentKeepalive: 0
   };
+  @State appeared: boolean = false;
 
   aboutToAppear(): void {
     const p = this.navParam;
@@ -123,8 +124,18 @@ export struct ConfigPreviewPage {
           .textAlign(TextAlign.Center)
 
         Text(getString($r('app.string.button_save')))
-          .fontSize(TYPOGRAPHY.body_md.size)
-          .fontColor($r('app.color.primary'))
+          .fontSize(TYPOGRAPHY.body_sm.size)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(Color.White)
+          .padding({ left: SPACING.md, right: SPACING.md, top: 6, bottom: 6 })
+          .backgroundColor($r('app.color.primary'))
+          .borderRadius(RADIUS.full)
+          .hoverEffect(HoverEffect.Highlight)
+          .stateStyles({
+            pressed: {
+              .opacity(0.82)
+            }
+          })
           .onClick(() => {
             this.saveConfig();
           })
@@ -135,6 +146,7 @@ export struct ConfigPreviewPage {
       .backgroundColor($r('app.color.surface'))
 
       Scroll() {
+        Column() {
         Column({ space: SPACING.md }) {
           // Name card
           SectionCard({ cardPadding: SPACING.lg }) {
@@ -241,6 +253,12 @@ export struct ConfigPreviewPage {
               .height(48)
               .borderRadius(RADIUS.md)
               .margin({ right: SPACING.sm })
+              .hoverEffect(HoverEffect.Highlight)
+              .stateStyles({
+                pressed: {
+                  .opacity(0.82)
+                }
+              })
               .onClick(() => {
                 this.pageStack.pushPath({ name: 'ConfigEdit', param: this.config });
               })
@@ -253,6 +271,12 @@ export struct ConfigPreviewPage {
               .height(48)
               .borderRadius(RADIUS.md)
               .margin({ left: SPACING.sm })
+              .hoverEffect(HoverEffect.Highlight)
+              .stateStyles({
+                pressed: {
+                  .opacity(0.82)
+                }
+              })
               .onClick(() => {
                 this.saveConfig();
               })
@@ -260,8 +284,19 @@ export struct ConfigPreviewPage {
           .width('100%')
           .padding({ left: SPACING.md, right: SPACING.md, top: SPACING.lg, bottom: SPACING.xl })
         }
+        .constraintSize({ maxWidth: 640 })
         .width('100%')
         .padding({ top: SPACING.md, bottom: SPACING.xl })
+        .opacity(this.appeared ? 1 : 0)
+        .translate({ y: this.appeared ? 0 : 12 })
+        .renderGroup(true)
+        .onAppear(() => {
+          this.getUIContext().animateTo({ duration: 350, curve: Curve.EaseOut }, () => {
+            this.appeared = true;
+          });
+        })
+        }
+        .width('100%')
       }
       .width('100%')
       .layoutWeight(1)

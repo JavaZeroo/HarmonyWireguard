@@ -45,6 +45,7 @@ export struct ConfigEditPage {
   @State reconnectOnNetworkChange: boolean = false;
   @State blockIpv6Leak: boolean = false;
   @State allowLanAccess: boolean = false;
+  @State appeared: boolean = false;
 
   private deleteDialogController: CustomDialogController | null = null;
 
@@ -168,7 +169,7 @@ export struct ConfigEditPage {
         .width('100%')
         .height(44)
         .backgroundColor($r('app.color.surface_subtle'))
-        .borderRadius(RADIUS.md)
+        .border({ width: 1, color: this.getError(errorKey).length > 0 ? $r('app.color.danger') : $r('app.color.divider'), radius: RADIUS.md })
         .type(inputType)
         .onChange(onChange)
 
@@ -199,7 +200,7 @@ export struct ConfigEditPage {
         .width('100%')
         .height(44)
         .backgroundColor($r('app.color.surface_subtle'))
-        .borderRadius(RADIUS.md)
+        .border({ width: 1, color: $r('app.color.divider'), radius: RADIUS.md })
         .onChange(onChange)
     }
     .width('100%')
@@ -224,8 +225,18 @@ export struct ConfigEditPage {
           .textAlign(TextAlign.Center)
 
         Text(getString($r('app.string.button_save')))
-          .fontSize(TYPOGRAPHY.body_md.size)
-          .fontColor($r('app.color.primary'))
+          .fontSize(TYPOGRAPHY.body_sm.size)
+          .fontWeight(FontWeight.Medium)
+          .fontColor(Color.White)
+          .padding({ left: SPACING.md, right: SPACING.md, top: 6, bottom: 6 })
+          .backgroundColor($r('app.color.primary'))
+          .borderRadius(RADIUS.full)
+          .hoverEffect(HoverEffect.Highlight)
+          .stateStyles({
+            pressed: {
+              .opacity(0.82)
+            }
+          })
           .onClick(() => {
             this.saveConfig();
           })
@@ -236,6 +247,7 @@ export struct ConfigEditPage {
       .backgroundColor($r('app.color.surface'))
 
       Scroll() {
+        Column() {
         Column({ space: SPACING.md }) {
           SectionCard({ title: getString($r('app.string.section_display')) }) {
             Column() {
@@ -397,13 +409,30 @@ export struct ConfigEditPage {
               .height(48)
               .borderRadius(RADIUS.md)
               .margin({ top: SPACING.lg, bottom: SPACING.xl })
+              .hoverEffect(HoverEffect.Highlight)
+              .stateStyles({
+                pressed: {
+                  .opacity(0.82)
+                }
+              })
               .onClick(() => {
                 this.showDeleteDialog();
               })
           }
         }
+        .constraintSize({ maxWidth: 640 })
         .width('100%')
         .padding({ left: SPACING.md, right: SPACING.md, top: SPACING.md, bottom: SPACING.xl })
+        .opacity(this.appeared ? 1 : 0)
+        .translate({ y: this.appeared ? 0 : 12 })
+        .renderGroup(true)
+        .onAppear(() => {
+          this.getUIContext().animateTo({ duration: 350, curve: Curve.EaseOut }, () => {
+            this.appeared = true;
+          });
+        })
+        }
+        .width('100%')
       }
       .width('100%')
       .layoutWeight(1)
