@@ -1,5 +1,5 @@
 import { router } from '@kit.ArkUI';
-import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, SHADOW, getString } from '../common/DesignSystem';
 import { SectionCard } from '../components/common/SectionCard';
 
 @Entry
@@ -34,10 +34,17 @@ struct AboutPage {
         Column({ space: SPACING.md }) {
           // App Info
           Column() {
-            SymbolGlyph($r('sys.symbol.wifi'))
-              .fontSize(64)
-              .fontColor([$r('app.color.primary')])
-              .margin({ bottom: SPACING.md })
+            Stack() {
+              SymbolGlyph($r('sys.symbol.wifi'))
+                .fontSize(44)
+                .fontColor([$r('app.color.primary')])
+            }
+            .width(88)
+            .height(88)
+            .backgroundColor($r('app.color.primary_bg'))
+            .borderRadius(RADIUS.xl)
+            .shadow({ radius: 20, color: 'rgba(0,125,255,0.20)', offsetX: 0, offsetY: 6 })
+            .margin({ bottom: SPACING.md })
 
             Text(getString($r('app.string.app_name')))
               .fontSize(TYPOGRAPHY.title_md.size)
@@ -53,6 +60,12 @@ struct AboutPage {
           .padding(SPACING.xl)
           .backgroundColor($r('app.color.surface'))
           .borderRadius(RADIUS.lg)
+          .shadow({
+            radius: SHADOW.sm.radius,
+            color: SHADOW.sm.color,
+            offsetX: SHADOW.sm.offsetX,
+            offsetY: SHADOW.sm.offsetY
+          })
           .alignItems(HorizontalAlign.Center)
 
           // Open Source
