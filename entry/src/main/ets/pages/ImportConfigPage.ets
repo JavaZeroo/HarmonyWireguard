@@ -231,6 +231,7 @@ struct ImportConfigPage {
         .justifyContent(FlexAlign.Center)
       } else {
         Scroll() {
+          Column() {
           Column({ space: SPACING.md }) {
             this.ImportOptionCard(
               $r('sys.symbol.camera'),
@@ -262,9 +263,11 @@ struct ImportConfigPage {
               }
             )
           }
+          .constraintSize({ maxWidth: 640 })
           .width('100%')
           .padding(SPACING.md)
-          .layoutWeight(1)
+          }
+          .width('100%')
         }
       }
     }

@@ -31,6 +31,7 @@ struct AboutPage {
       .backgroundColor($r('app.color.surface'))
 
       Scroll() {
+        Column() {
         Column({ space: SPACING.md }) {
           // App Info
           Column() {
@@ -112,8 +113,11 @@ struct AboutPage {
             .width('100%')
           }
         }
+        .constraintSize({ maxWidth: 640 })
         .width('100%')
         .padding({ left: SPACING.md, right: SPACING.md, top: SPACING.md, bottom: SPACING.xl })
+        }
+        .width('100%')
       }
       .width('100%')
       .layoutWeight(1)
