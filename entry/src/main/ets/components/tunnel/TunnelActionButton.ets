@@ -33,13 +33,21 @@ export struct TunnelActionButton {
 
   build() {
     Button(this.getButtonText())
-      .fontSize(TYPOGRAPHY.body_md.size)
+      .fontSize(TYPOGRAPHY.body_lg.size)
       .fontWeight(FontWeight.Medium)
       .fontColor('#FFFFFF')
       .backgroundColor(this.getButtonColor())
-      .height(44)
+      .width('80%')
+      .constraintSize({ minWidth: 160 })
+      .height(50)
       .padding({ left: 32, right: 32 })
-      .borderRadius(RADIUS.md)
+      .borderRadius(RADIUS.full)
+      .stateStyles({
+        pressed: {
+          .scale({ x: 0.97, y: 0.97 })
+          .opacity(0.9)
+        }
+      })
       .onClick(() => {
         this.onPrimaryAction?.();
       })

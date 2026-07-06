@@ -1,11 +1,11 @@
-import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, SHADOW, getString } from '../../common/DesignSystem';
 import { formatBytes } from '../../common/Formatters';
 import type { TunnelStatusType } from '../../model/WgConfig';
 import { TunnelActionButton } from './TunnelActionButton';
 
 @Component
 export struct ConnectionHeroCard {
-  @Prop status: TunnelStatusType = 'disconnected';
+  @Prop @Watch('onStatusChange') status: TunnelStatusType = 'disconnected';
   @Prop tunnelName: string = '';
   @Prop endpoint: string = '';
   @Prop lastHandshakeAt: number = -1; // timestamp in seconds
@@ -16,7 +16,30 @@ export struct ConnectionHeroCard {
   onPrimaryAction?: () => void;
   onDetail?: () => void;
 
-  private getBackgroundColor(): ResourceColor {
+  // 状态切换时给状态徽标一个"生长"动画，连接那一刻更有存在感
+  @State private emblemScale: number = 1;
+
+  onStatusChange(): void {
+    this.emblemScale = 0.84;
+    this.getUIContext().animateTo({ duration: 420, curve: Curve.Friction }, () => {
+      this.emblemScale = 1;
+    });
+  }
+
+  private getStatusColor(): ResourceColor {
+    switch (this.status) {
+      case 'connected':
+        return $r('app.color.success');
+      case 'connecting':
+        return $r('app.color.primary');
+      case 'failed':
+        return $r('app.color.danger');
+      default:
+        return $r('app.color.text_tertiary');
+    }
+  }
+
+  private getRingBgColor(): ResourceColor {
     switch (this.status) {
       case 'connected':
         return $r('app.color.success_bg');
@@ -25,7 +48,18 @@ export struct ConnectionHeroCard {
       case 'failed':
         return $r('app.color.danger_bg');
       default:
-        return $r('app.color.surface');
+        return $r('app.color.surface_subtle');
+    }
+  }
+
+  private getStatusIcon(): Resource {
+    switch (this.status) {
+      case 'connected':
+        return $r('sys.symbol.checkmark_circle');
+      case 'failed':
+        return $r('sys.symbol.exclamationmark_triangle');
+      default:
+        return $r('sys.symbol.wifi');
     }
   }
 
@@ -42,17 +76,8 @@ export struct ConnectionHeroCard {
     }
   }
 
-  private getStatusDotColor(): ResourceColor {
-    switch (this.status) {
-      case 'connected':
-        return $r('app.color.success');
-      case 'connecting':
-        return $r('app.color.primary');
-      case 'failed':
-        return $r('app.color.danger');
-      default:
-        return $r('app.color.text_tertiary');
-    }
+  private getStatusTextColor(): ResourceColor {
+    return this.status === 'disconnected' ? $r('app.color.text_primary') : this.getStatusColor();
   }
 
   private getHandshakeText(): string {
@@ -67,123 +92,155 @@ export struct ConnectionHeroCard {
     return getString($r('app.string.hint_handshake_min_ago')).replace('%s', String(Math.floor(ago / 60)));
   }
 
+  @Builder
+  StatusEmblem() {
+    Stack() {
+      // 底盘：状态色浅底圆
+      Circle()
+        .width(128)
+        .height(128)
+        .fill(this.getRingBgColor())
+
+      if (this.status === 'connecting') {
+        LoadingProgress()
+          .width(56)
+          .height(56)
+          .color($r('app.color.primary'))
+      } else {
+        SymbolGlyph(this.getStatusIcon())
+          .fontSize(60)
+          .fontColor([this.getStatusColor()])
+      }
+    }
+    .width(128)
+    .height(128)
+    // 已连接时给一圈柔和辉光，强化"安全在线"的感知
+    .shadow(this.status === 'connected'
+      ? { radius: 36, color: 'rgba(0,179,134,0.35)', offsetX: 0, offsetY: 0 }
+      : { radius: 0, color: 'rgba(0,0,0,0)', offsetX: 0, offsetY: 0 })
+    .scale({ x: this.emblemScale, y: this.emblemScale })
+    .onClick(() => {
+      this.onPrimaryAction?.();
+    })
+  }
+
   build() {
     Column() {
-      // Header: name + status
+      // 顶部状态徽标
+      this.StatusEmblem()
+
+      // 大状态文字
+      Text(this.getStatusText())
+        .fontSize(TYPOGRAPHY.title_md.size)
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.getStatusTextColor())
+        .margin({ top: SPACING.md })
+
+      // 隧道名 · 握手时间
       Row() {
-        Column() {
-          Text(this.tunnelName || getString($r('app.string.section_current_connection')))
-            .fontSize(TYPOGRAPHY.title_sm.size)
-            .fontWeight(TYPOGRAPHY.title_sm.weight)
-            .fontColor($r('app.color.text_primary'))
-            .width('100%')
+        Text(this.tunnelName || getString($r('app.string.section_current_connection')))
+          .fontSize(TYPOGRAPHY.body_sm.size)
+          .fontColor($r('app.color.text_secondary'))
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-          Row() {
-            Circle()
-              .width(8)
-              .height(8)
-              .fill(this.getStatusDotColor())
-              .margin({ right: SPACING.xs })
-
-            Text(this.getStatusText())
-              .fontSize(TYPOGRAPHY.body_sm.size)
-              .fontColor($r('app.color.text_secondary'))
-
-            if (this.status === 'connected' || this.status === 'failed') {
-              Text(' · ' + this.getHandshakeText())
-                .fontSize(TYPOGRAPHY.body_sm.size)
-                .fontColor($r('app.color.text_secondary'))
-            }
-          }
-          .width('100%')
-          .margin({ top: SPACING.xs })
-        }
-        .alignItems(HorizontalAlign.Start)
-        .layoutWeight(1)
-
-        if (this.status === 'connecting') {
-          LoadingProgress()
-            .width(28)
-            .height(28)
-            .color($r('app.color.primary'))
+        if (this.status === 'connected' || this.status === 'failed') {
+          Text(' · ' + this.getHandshakeText())
+            .fontSize(TYPOGRAPHY.body_sm.size)
+            .fontColor($r('app.color.text_tertiary'))
         }
       }
-      .width('100%')
-      .margin({ bottom: SPACING.md })
+      .margin({ top: SPACING.xxs })
 
       // Endpoint
       if (this.endpoint.length > 0) {
         Text(this.endpoint)
           .fontSize(TYPOGRAPHY.caption.size)
           .fontColor($r('app.color.text_tertiary'))
-          .width('100%')
-          .margin({ bottom: SPACING.sm })
+          .margin({ top: SPACING.xs })
       }
 
-      // Traffic
-      if (this.status === 'connected' || this.rxBytes > 0 || this.txBytes > 0) {
-        Row() {
-          Column() {
-            Text(getString($r('app.string.traffic_rx')))
-              .fontSize(TYPOGRAPHY.caption.size)
-              .fontColor($r('app.color.text_secondary'))
-            Text(formatBytes(this.rxBytes))
-              .fontSize(TYPOGRAPHY.body_lg.size)
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-          }
-          .layoutWeight(1)
-          .alignItems(HorizontalAlign.Start)
-
-          Column() {
-            Text(getString($r('app.string.traffic_tx')))
-              .fontSize(TYPOGRAPHY.caption.size)
-              .fontColor($r('app.color.text_secondary'))
-            Text(formatBytes(this.txBytes))
-              .fontSize(TYPOGRAPHY.body_lg.size)
-              .fontWeight(FontWeight.Bold)
-              .fontColor($r('app.color.text_primary'))
-          }
-          .layoutWeight(1)
-          .alignItems(HorizontalAlign.Start)
-        }
-        .width('100%')
-        .margin({ bottom: SPACING.md })
-      }
-
-      // Error
+      // 错误提示
       if (this.status === 'failed' && this.latestError) {
         Text(this.latestError)
           .fontSize(TYPOGRAPHY.caption.size)
           .fontColor($r('app.color.danger'))
-          .width('100%')
-          .margin({ bottom: SPACING.md })
+          .maxLines(2)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .textAlign(TextAlign.Center)
+          .margin({ top: SPACING.sm })
+          .padding({ left: SPACING.md, right: SPACING.md })
       }
 
-      // Actions
-      Row() {
-        TunnelActionButton({
-          status: this.status,
-          onPrimaryAction: this.onPrimaryAction
-        })
-
-        if (this.status !== 'disconnected') {
-          Button(getString($r('app.string.button_detail')))
-            .fontSize(TYPOGRAPHY.body_md.size)
-            .fontColor($r('app.color.primary'))
-            .backgroundColor('transparent')
-            .height(40)
-            .onClick(() => {
-              this.onDetail?.();
-            })
+      // 流量（已连接或有流量时）
+      if (this.status === 'connected' || this.rxBytes > 0 || this.txBytes > 0) {
+        Row() {
+          this.TrafficStat($r('app.string.traffic_rx'), this.rxBytes, '↓')
+          Divider()
+            .vertical(true)
+            .height(28)
+            .color($r('app.color.divider'))
+          this.TrafficStat($r('app.string.traffic_tx'), this.txBytes, '↑')
         }
+        .width('100%')
+        .justifyContent(FlexAlign.SpaceAround)
+        .margin({ top: SPACING.lg })
+        .padding({ top: SPACING.md, bottom: SPACING.md })
+        .borderRadius(RADIUS.lg)
+        .backgroundColor($r('app.color.surface_subtle'))
       }
-      .width('100%')
-      .justifyContent(FlexAlign.SpaceBetween)
+
+      // 主操作按钮
+      TunnelActionButton({
+        status: this.status,
+        onPrimaryAction: this.onPrimaryAction
+      })
+        .margin({ top: SPACING.lg })
+
+      // 详情入口
+      if (this.status !== 'disconnected') {
+        Button(getString($r('app.string.button_detail')))
+          .fontSize(TYPOGRAPHY.body_sm.size)
+          .fontColor($r('app.color.text_secondary'))
+          .backgroundColor(Color.Transparent)
+          .height(36)
+          .margin({ top: SPACING.xs })
+          .onClick(() => {
+            this.onDetail?.();
+          })
+      }
     }
     .width('100%')
-    .padding(SPACING.lg)
-    .backgroundColor(this.getBackgroundColor())
+    .alignItems(HorizontalAlign.Center)
+    .padding({ top: SPACING.xl, bottom: SPACING.lg, left: SPACING.lg, right: SPACING.lg })
+    .backgroundColor($r('app.color.surface'))
     .borderRadius(RADIUS.xl)
+    .shadow({
+      radius: SHADOW.md.radius,
+      color: SHADOW.md.color,
+      offsetX: SHADOW.md.offsetX,
+      offsetY: SHADOW.md.offsetY
+    })
+  }
+
+  @Builder
+  TrafficStat(label: Resource, value: number, arrow: string) {
+    Column() {
+      Row() {
+        Text(arrow)
+          .fontSize(TYPOGRAPHY.caption.size)
+          .fontColor($r('app.color.text_tertiary'))
+        Text(label)
+          .fontSize(TYPOGRAPHY.caption.size)
+          .fontColor($r('app.color.text_secondary'))
+          .margin({ left: SPACING.xxs })
+      }
+      Text(formatBytes(value))
+        .fontSize(TYPOGRAPHY.title_sm.size)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.text_primary'))
+        .margin({ top: SPACING.xxs })
+    }
+    .layoutWeight(1)
   }
 }

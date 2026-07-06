@@ -1,8 +1,8 @@
-import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, SHADOW, getString } from '../../common/DesignSystem';
 import { deriveRouteMode, formatEndpointShort } from '../../common/Utils';
 import type { WgConfig } from '../../model/WgConfig';
 import type { TunnelStatusType } from '../../model/WgConfig';
-import { TunnelStatusBadge } from './TunnelStatusBadge';
+import { StatusBadge } from '../common/StatusBadge';
 
 @Component
 export struct TunnelListItem {
@@ -13,6 +13,36 @@ export struct TunnelListItem {
   onSelect?: () => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
+
+  private isLive(): boolean {
+    return this.status === 'connected' || this.status === 'connecting';
+  }
+
+  private getIconBgColor(): ResourceColor {
+    switch (this.status) {
+      case 'connected':
+        return $r('app.color.success_bg');
+      case 'connecting':
+        return $r('app.color.primary_bg');
+      case 'failed':
+        return $r('app.color.danger_bg');
+      default:
+        return $r('app.color.surface_subtle');
+    }
+  }
+
+  private getIconColor(): ResourceColor {
+    switch (this.status) {
+      case 'connected':
+        return $r('app.color.success');
+      case 'connecting':
+        return $r('app.color.primary');
+      case 'failed':
+        return $r('app.color.danger');
+      default:
+        return $r('app.color.text_tertiary');
+    }
+  }
 
   private getRouteLabel(): string {
     const mode = deriveRouteMode(this.config.allowedIPs);
@@ -34,14 +64,17 @@ export struct TunnelListItem {
   }
 
   build() {
-    Row() {
-      Column() {
+    Row({ space: SPACING.md }) {
+      // 状态色图标容器
+      Stack() {
         SymbolGlyph($r('sys.symbol.wifi'))
-          .fontSize(24)
-          .fontColor([$r('app.color.primary')])
-          .margin({ right: SPACING.md })
+          .fontSize(22)
+          .fontColor([this.getIconColor()])
       }
-      .justifyContent(FlexAlign.Center)
+      .width(44)
+      .height(44)
+      .backgroundColor(this.getIconBgColor())
+      .borderRadius(RADIUS.md)
 
       Column() {
         Row() {
@@ -49,18 +82,21 @@ export struct TunnelListItem {
             .fontSize(TYPOGRAPHY.body_md.size)
             .fontWeight(FontWeight.Medium)
             .fontColor($r('app.color.text_primary'))
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
             .layoutWeight(1)
 
-          TunnelStatusBadge({ status: this.status })
+          StatusBadge({ status: this.status })
         }
         .width('100%')
-        .margin({ bottom: SPACING.xs })
 
         Text(formatEndpointShort(this.config.endpoint))
           .fontSize(TYPOGRAPHY.caption.size)
           .fontColor($r('app.color.text_secondary'))
           .width('100%')
-          .margin({ bottom: SPACING.xs })
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .margin({ top: SPACING.xxs })
 
         Row() {
           Text(this.getRouteLabel())
@@ -68,21 +104,18 @@ export struct TunnelListItem {
             .fontColor($r('app.color.text_tertiary'))
 
           if (this.getKeepaliveLabel().length > 0) {
-            Text(' · ')
-              .fontSize(TYPOGRAPHY.caption.size)
-              .fontColor($r('app.color.text_tertiary'))
-
-            Text(this.getKeepaliveLabel())
+            Text(' · ' + this.getKeepaliveLabel())
               .fontSize(TYPOGRAPHY.caption.size)
               .fontColor($r('app.color.text_tertiary'))
           }
         }
         .width('100%')
+        .margin({ top: SPACING.xxs })
       }
       .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
 
-      Toggle({ type: ToggleType.Switch, isOn: this.status === 'connected' || this.status === 'connecting' })
+      Toggle({ type: ToggleType.Switch, isOn: this.isLive() })
         .selectedColor($r('app.color.primary'))
         .onChange((isOn: boolean) => {
           if (isOn) {
@@ -94,14 +127,24 @@ export struct TunnelListItem {
     }
     .width('100%')
     .padding(SPACING.md)
-    .backgroundColor(this.selected ? $r('app.color.primary_bg') : $r('app.color.surface'))
+    .backgroundColor($r('app.color.surface'))
     .borderRadius(RADIUS.lg)
+    .border(this.isLive()
+      ? { width: 1, color: this.getIconColor() }
+      : { width: 1, color: Color.Transparent })
+    .shadow({
+      radius: SHADOW.sm.radius,
+      color: SHADOW.sm.color,
+      offsetX: SHADOW.sm.offsetX,
+      offsetY: SHADOW.sm.offsetY
+    })
     .onClick(() => {
       this.onSelect?.();
     })
     .stateStyles({
       pressed: {
         .scale({ x: 0.98, y: 0.98 })
+        .opacity(0.92)
       }
     })
   }

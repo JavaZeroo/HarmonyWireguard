@@ -29,10 +29,10 @@ export default class EntryAbility extends UIAbility {
       }
       hilog.info(DOMAIN, TAG, 'Succeeded in loading the content.');
 
-      // Store initial window width for responsive layout
+      // Store initial window width for responsive layout（用密度换算 px→vp，避免已废弃的全局 px2vp）
       try {
         const displayInfo = display.getDefaultDisplaySync();
-        const widthVp = px2vp(displayInfo.width);
+        const widthVp = displayInfo.width / displayInfo.densityPixels;
         AppStorage.setOrCreate<number>('windowWidth', widthVp);
         hilog.info(DOMAIN, TAG, 'Window width: %{public}f vp', widthVp);
       } catch (e) {
@@ -43,7 +43,8 @@ export default class EntryAbility extends UIAbility {
     // Listen for window size changes
     windowStage.getMainWindow().then((win) => {
       win.on('windowSizeChange', (size: window.Size) => {
-        const widthVp = px2vp(size.width);
+        const density = display.getDefaultDisplaySync().densityPixels;
+        const widthVp = size.width / density;
         AppStorage.setOrCreate<number>('windowWidth', widthVp);
         hilog.info(DOMAIN, TAG, 'Window size changed: %{public}f vp', widthVp);
       });

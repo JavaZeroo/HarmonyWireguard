@@ -588,7 +588,7 @@ struct Index {
     .backgroundColor($r('app.color.background'))
     .onAreaChange((_oldArea, newArea) => {
       if (newArea.width > 0) {
-        this.windowWidth = px2vp(newArea.width as number);
+        this.windowWidth = this.getUIContext().px2vp(newArea.width as number);
         this.breakpoint = getBreakpoint(this.windowWidth);
       }
     })
