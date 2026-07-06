@@ -5,7 +5,7 @@ import { picker, fileIo as fs } from '@kit.CoreFileKit';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { util } from '@kit.ArkTS';
-import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, SHADOW, getString } from '../common/DesignSystem';
 import { APP_CONSTANTS } from '../common/Constants';
 import { ConfigParser, ParseResult } from '../service/ConfigParser';
 
@@ -139,11 +139,16 @@ struct ImportConfigPage {
 
   @Builder
   ImportOptionCard(icon: Resource, title: string, description: string, onClick: () => void) {
-    Row() {
-      SymbolGlyph(icon)
-        .fontSize(32)
-        .fontColor([$r('app.color.primary')])
-        .margin({ right: SPACING.md })
+    Row({ space: SPACING.md }) {
+      Stack() {
+        SymbolGlyph(icon)
+          .fontSize(24)
+          .fontColor([$r('app.color.primary')])
+      }
+      .width(48)
+      .height(48)
+      .backgroundColor($r('app.color.primary_bg'))
+      .borderRadius(RADIUS.md)
 
       Column() {
         Text(title)
@@ -169,6 +174,19 @@ struct ImportConfigPage {
     .padding(SPACING.lg)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(RADIUS.lg)
+    .shadow({
+      radius: SHADOW.sm.radius,
+      color: SHADOW.sm.color,
+      offsetX: SHADOW.sm.offsetX,
+      offsetY: SHADOW.sm.offsetY
+    })
+    .hoverEffect(HoverEffect.Scale)
+    .stateStyles({
+      pressed: {
+        .scale({ x: 0.98, y: 0.98 })
+        .opacity(0.92)
+      }
+    })
     .onClick(onClick)
   }
 
