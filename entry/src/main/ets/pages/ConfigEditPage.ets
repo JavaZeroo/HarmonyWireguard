@@ -1,4 +1,3 @@
-import { router } from '@kit.ArkUI';
 import { configManager } from '../service/ConfigManager';
 import type { WgConfig } from '../model/WgConfig';
 import { DEFAULT_CONFIG } from '../common/Constants';
@@ -23,9 +22,10 @@ interface FormErrors {
   allowedIPs?: string;
 }
 
-@Entry
 @Component
-struct ConfigEditPage {
+export struct ConfigEditPage {
+  @Consume('pageStack') pageStack: NavPathStack;
+  @Prop navParam: Object | null = null;
   @State config: WgConfig = {
     id: '',
     name: '',
@@ -49,19 +49,19 @@ struct ConfigEditPage {
   private deleteDialogController: CustomDialogController | null = null;
 
   aboutToAppear(): void {
-    const params = router.getParams() as object;
-    const id = (params as Record<string, string>)['id'];
-    const cfg = (params as Record<string, WgConfig>)['config'];
-    if (id) {
-      const exist = configManager.getConfigById(id);
-      if (exist) {
-        this.config = exist;
+    // navParam 有值(来自预览页的 WgConfig)则编辑它，否则新建
+    const p = this.navParam;
+    if (p !== null) {
+      const cfg = p as WgConfig;
+      if (typeof cfg.privateKey === 'string') {
+        this.config = cfg;
+        if (!this.config.id) {
+          this.config.id = Date.now().toString();
+        }
+        return;
       }
-    } else if (cfg) {
-      this.config = cfg;
-    } else {
-      this.config.id = Date.now().toString();
     }
+    this.config.id = Date.now().toString();
   }
 
   private validate(): boolean {
@@ -115,13 +115,13 @@ struct ConfigEditPage {
       this.config.id = Date.now().toString();
     }
     configManager.saveConfig(this.config);
-    router.back();
+    this.pageStack.pop();
   }
 
   deleteConfig(): void {
     if (this.config.id) {
       configManager.deleteConfig(this.config.id);
-      router.back();
+      this.pageStack.pop();
     }
   }
 
@@ -213,7 +213,7 @@ struct ConfigEditPage {
           .fontSize(24)
           .fontColor([$r('app.color.text_primary')])
           .onClick(() => {
-            router.back();
+            this.pageStack.pop();
           })
 
         Text(this.config.id ? getString($r('app.string.page_config_edit')) : getString($r('app.string.page_config_new')))
@@ -411,13 +411,5 @@ struct ConfigEditPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
-  }
-
-  pageTransition() {
-    PageTransitionEnter({ duration: 250, curve: Curve.EaseOut })
-      .slide(SlideEffect.Right)
-      .opacity(0)
-    PageTransitionExit({ duration: 200, curve: Curve.EaseIn })
-      .opacity(1)
   }
 }

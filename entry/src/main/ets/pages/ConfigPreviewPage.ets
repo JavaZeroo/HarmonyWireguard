@@ -1,13 +1,13 @@
-import { router } from '@kit.ArkUI';
 import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
 import { deriveRouteMode, parseEndpoint } from '../common/Utils';
 import { SectionCard } from '../components/common/SectionCard';
 import { configManager } from '../service/ConfigManager';
 import type { WgConfig } from '../model/WgConfig';
 
-@Entry
 @Component
-struct ConfigPreviewPage {
+export struct ConfigPreviewPage {
+  @Consume('pageStack') pageStack: NavPathStack;
+  @Prop navParam: Object | null = null;
   @State risks: string[] = [];
   @State config: WgConfig = {
     id: '',
@@ -24,10 +24,12 @@ struct ConfigPreviewPage {
   };
 
   aboutToAppear(): void {
-    const params = router.getParams() as object;
-    const cfg = (params as Record<string, WgConfig>)['config'];
-    if (cfg) {
-      this.config = cfg;
+    const p = this.navParam;
+    if (p !== null) {
+      const cfg = p as WgConfig;
+      if (typeof cfg.privateKey === 'string') {
+        this.config = cfg;
+      }
     }
     this.risks = this.computeRisks();
   }
@@ -79,7 +81,7 @@ struct ConfigPreviewPage {
     try {
       this.getUIContext().getPromptAction().showToast({ message: getString($r('app.string.toast_saved')), duration: 1500 });
     } catch {}
-    router.back();
+    this.pageStack.pop();
   }
 
   @Builder
@@ -110,7 +112,7 @@ struct ConfigPreviewPage {
           .fontSize(24)
           .fontColor([$r('app.color.text_primary')])
           .onClick(() => {
-            router.back();
+            this.pageStack.pop();
           })
 
         Text(getString($r('app.string.page_config_preview')))
@@ -240,7 +242,7 @@ struct ConfigPreviewPage {
               .borderRadius(RADIUS.md)
               .margin({ right: SPACING.sm })
               .onClick(() => {
-                router.pushUrl({ url: 'pages/ConfigEditPage', params: { config: this.config } });
+                this.pageStack.pushPath({ name: 'ConfigEdit', param: this.config });
               })
 
             Button(getString($r('app.string.button_save')))
@@ -267,13 +269,5 @@ struct ConfigPreviewPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
-  }
-
-  pageTransition() {
-    PageTransitionEnter({ duration: 250, curve: Curve.EaseOut })
-      .slide(SlideEffect.Right)
-      .opacity(0)
-    PageTransitionExit({ duration: 200, curve: Curve.EaseIn })
-      .opacity(1)
   }
 }

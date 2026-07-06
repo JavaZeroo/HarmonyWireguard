@@ -1,4 +1,3 @@
-import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { BusinessError, pasteboard } from '@kit.BasicServicesKit';
 import { picker, fileIo as fs } from '@kit.CoreFileKit';
@@ -11,9 +10,9 @@ import { ConfigParser, ParseResult } from '../service/ConfigParser';
 
 const TAG = 'ImportConfigPage';
 
-@Entry
 @Component
-struct ImportConfigPage {
+export struct ImportConfigPage {
+  @Consume('pageStack') pageStack: NavPathStack;
   @State isLoading: boolean = false;
 
   private toast(msg: string): void {
@@ -30,10 +29,7 @@ struct ImportConfigPage {
 
   private handleParseResult(result: ParseResult): void {
     if (result.success && result.config) {
-      router.pushUrl({
-        url: 'pages/ConfigPreviewPage',
-        params: { config: result.config }
-      });
+      this.pageStack.pushPath({ name: 'ConfigPreview', param: result.config });
     } else {
       const msg = ConfigParser.resolveErrorMessage(result.error ?? $r('app.string.error_parse_config'));
       this.toast(msg);
@@ -198,7 +194,7 @@ struct ImportConfigPage {
           .fontSize(24)
           .fontColor([$r('app.color.text_primary')])
           .onClick(() => {
-            router.back();
+            this.pageStack.pop();
           })
 
         Text(getString($r('app.string.page_import_config')))
@@ -259,7 +255,7 @@ struct ImportConfigPage {
               getString($r('app.string.button_create_manual')),
               getString($r('app.string.desc_create_manual')),
               () => {
-                router.pushUrl({ url: 'pages/ConfigEditPage' });
+                this.pageStack.pushPath({ name: 'ConfigEdit' });
               }
             )
           }
@@ -274,13 +270,5 @@ struct ImportConfigPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
-  }
-
-  pageTransition() {
-    PageTransitionEnter({ duration: 250, curve: Curve.EaseOut })
-      .slide(SlideEffect.Right)
-      .opacity(0)
-    PageTransitionExit({ duration: 200, curve: Curve.EaseIn })
-      .opacity(1)
   }
 }

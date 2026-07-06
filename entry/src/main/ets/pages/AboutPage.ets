@@ -1,10 +1,10 @@
-import { router } from '@kit.ArkUI';
 import { SPACING, RADIUS, TYPOGRAPHY, SHADOW, getString } from '../common/DesignSystem';
 import { SectionCard } from '../components/common/SectionCard';
 
-@Entry
 @Component
-struct AboutPage {
+export struct AboutPage {
+  @Consume('pageStack') pageStack: NavPathStack;
+
   build() {
     Column() {
       // Header
@@ -13,7 +13,7 @@ struct AboutPage {
           .fontSize(24)
           .fontColor([$r('app.color.text_primary')])
           .onClick(() => {
-            router.back();
+            this.pageStack.pop();
           })
 
         Text(getString($r('app.string.page_about')))
@@ -125,13 +125,5 @@ struct AboutPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
-  }
-
-  pageTransition() {
-    PageTransitionEnter({ duration: 250, curve: Curve.EaseOut })
-      .slide(SlideEffect.Right)
-      .opacity(0)
-    PageTransitionExit({ duration: 200, curve: Curve.EaseIn })
-      .opacity(1)
   }
 }

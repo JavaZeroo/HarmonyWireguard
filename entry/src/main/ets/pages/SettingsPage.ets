@@ -1,13 +1,12 @@
-import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
 import { SectionCard } from '../components/common/SectionCard';
 import { settingsService } from '../service/SettingsService';
 import type { ThemeMode } from '../service/SettingsService';
 
-@Entry
 @Component
-struct SettingsPage {
+export struct SettingsPage {
+  @Consume('pageStack') pageStack: NavPathStack;
   @State currentTheme: ThemeMode = 'system';
   private themeOptions: ThemeMode[] = ['system', 'light', 'dark'];
 
@@ -105,7 +104,7 @@ struct SettingsPage {
           .fontColor([$r('app.color.text_primary')])
           .hoverEffect(HoverEffect.Highlight)
           .onClick(() => {
-            router.back();
+            this.pageStack.pop();
           })
 
         Text(getString($r('app.string.page_settings')))
@@ -172,13 +171,13 @@ struct SettingsPage {
           SectionCard({ title: getString($r('app.string.page_about')) }) {
             Column({ space: SPACING.xs }) {
               this.NavigationRow(getString($r('app.string.label_version_info')), () => {
-                router.pushUrl({ url: 'pages/AboutPage' });
+                this.pageStack.pushPath({ name: 'About' });
               })
               this.NavigationRow(getString($r('app.string.label_open_source')), () => {
-                router.pushUrl({ url: 'pages/AboutPage' });
+                this.pageStack.pushPath({ name: 'About' });
               })
               this.NavigationRow(getString($r('app.string.label_privacy')), () => {
-                router.pushUrl({ url: 'pages/AboutPage' });
+                this.pageStack.pushPath({ name: 'About' });
               })
             }
             .width('100%')
@@ -196,13 +195,5 @@ struct SettingsPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
-  }
-
-  pageTransition() {
-    PageTransitionEnter({ duration: 250, curve: Curve.EaseOut })
-      .slide(SlideEffect.Right)
-      .opacity(0)
-    PageTransitionExit({ duration: 200, curve: Curve.EaseIn })
-      .opacity(1)
   }
 }

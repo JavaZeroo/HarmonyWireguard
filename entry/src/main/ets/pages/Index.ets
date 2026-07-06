@@ -2,9 +2,14 @@ import { vpnExtension } from '@kit.NetworkKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { common, Want } from '@kit.AbilityKit';
 import { BusinessError, commonEventManager } from '@kit.BasicServicesKit';
-import { router } from '@kit.ArkUI';
 import { configManager } from '../service/ConfigManager';
 import type { WgConfig, TunnelStatusType, WgStatusPayload } from '../model/WgConfig';
+import { SettingsPage } from './SettingsPage';
+import { AboutPage } from './AboutPage';
+import { ImportConfigPage } from './ImportConfigPage';
+import { ConfigEditPage } from './ConfigEditPage';
+import { ConfigPreviewPage } from './ConfigPreviewPage';
+import { TunnelDetailPage } from './TunnelDetailPage';
 import { APP_CONSTANTS } from '../common/Constants';
 import { SPACING, TYPOGRAPHY, Breakpoint, getBreakpoint, getString } from '../common/DesignSystem';
 import { ConnectionHeroCard } from '../components/tunnel/ConnectionHeroCard';
@@ -16,6 +21,24 @@ import { tunnelRuntimeService } from '../service/TunnelRuntimeService';
 import { TunnelDetailPanel } from '../components/tunnel/TunnelDetailPanel';
 
 const TAG = 'IndexPage';
+
+// Navigation 目的地路由表（顶层 @Builder，navDestination 要求函数引用，不能内联 lambda）
+@Builder
+function PageMap(name: string, param: Object) {
+  if (name === 'Settings') {
+    NavDestination() { SettingsPage() }.hideTitleBar(true)
+  } else if (name === 'About') {
+    NavDestination() { AboutPage() }.hideTitleBar(true)
+  } else if (name === 'Import') {
+    NavDestination() { ImportConfigPage() }.hideTitleBar(true)
+  } else if (name === 'ConfigEdit') {
+    NavDestination() { ConfigEditPage({ navParam: param }) }.hideTitleBar(true)
+  } else if (name === 'ConfigPreview') {
+    NavDestination() { ConfigPreviewPage({ navParam: param }) }.hideTitleBar(true)
+  } else if (name === 'TunnelDetail') {
+    NavDestination() { TunnelDetailPage({ navConfigId: param as string }) }.hideTitleBar(true)
+  }
+}
 
 function createWant(config: WgConfig): Want {
   return {
@@ -39,6 +62,7 @@ function createStopWant(): Want {
 @Entry
 @Component
 struct Index {
+  @Provide('pageStack') pageStack: NavPathStack = new NavPathStack();
   @State configs: WgConfig[] = [];
   @State activeConfigId: string = '';
   @State activeStatus: TunnelStatusType = 'disconnected';
@@ -74,6 +98,17 @@ struct Index {
     });
 
     this.setupStatusSubscriber();
+
+    // 二级页(导入/编辑/预览/详情)通过 pop 回到首页(navBar)时刷新配置列表，
+    // 因为 Navigation 内的 NavDestination 切换不会触发本页 onPageShow。
+    this.pageStack.setInterception({
+      didShow: (from: NavDestinationContext | NavBar, to: NavDestinationContext | NavBar,
+                operation: NavigationOperation, isAnimated: boolean) => {
+        if (typeof to === 'string') {
+          this.loadConfigs();
+        }
+      }
+    });
   }
 
   aboutToDisappear(): void {
@@ -143,7 +178,7 @@ struct Index {
   }
 
   onPageShow(): void {
-    // 从导入/编辑页 router.back() 回来时刷新列表
+    // 应用回到前台时刷新列表(二级页 pop 的刷新由 setInterception 处理)
     this.loadConfigs();
   }
 
@@ -226,7 +261,7 @@ struct Index {
         .width('60%')
         .height(44)
         .onClick(() => {
-          router.pushUrl({ url: 'pages/ImportConfigPage' });
+          this.pageStack.pushPath({ name: 'Import' });
         })
 
       Button(getString($r('app.string.button_import_file')))
@@ -235,7 +270,7 @@ struct Index {
         .backgroundColor($r('app.color.surface_subtle'))
         .fontColor($r('app.color.primary'))
         .onClick(() => {
-          router.pushUrl({ url: 'pages/ImportConfigPage' });
+          this.pageStack.pushPath({ name: 'Import' });
         })
 
       Button(getString($r('app.string.button_create_manual')))
@@ -244,7 +279,7 @@ struct Index {
         .backgroundColor($r('app.color.surface_subtle'))
         .fontColor($r('app.color.primary'))
         .onClick(() => {
-          router.pushUrl({ url: 'pages/ConfigEditPage' });
+          this.pageStack.pushPath({ name: 'ConfigEdit' });
         })
     }
     .width('100%')
@@ -283,7 +318,7 @@ struct Index {
               const cfg = this.getActiveConfig();
               if (!cfg) return;
               if (this.breakpoint === Breakpoint.COMPACT) {
-                router.pushUrl({ url: 'pages/TunnelDetailPage', params: { id: cfg.id } });
+                this.pageStack.pushPath({ name: 'TunnelDetail', param: cfg.id });
               } else {
                 this.selectedConfigId = cfg.id;
               }
@@ -316,7 +351,7 @@ struct Index {
               selected: config.id === this.selectedConfigId || config.id === this.activeConfigId,
               onSelect: () => {
                 if (this.breakpoint === Breakpoint.COMPACT) {
-                  router.pushUrl({ url: 'pages/TunnelDetailPage', params: { id: config.id } });
+                  this.pageStack.pushPath({ name: 'TunnelDetail', param: config.id });
                 } else {
                   this.selectedConfigId = config.id;
                 }
@@ -355,7 +390,7 @@ struct Index {
             .fontSize(24)
             .fontColor([$r('app.color.text_secondary')])
             .onClick(() => {
-              router.pushUrl({ url: 'pages/SettingsPage' });
+              this.pageStack.pushPath({ name: 'Settings' });
             })
         }
         .width('100%')
@@ -390,7 +425,7 @@ struct Index {
         .margin({ right: SPACING.md, bottom: SPACING.lg })
         .hoverEffect(HoverEffect.Scale)
         .onClick(() => {
-          router.pushUrl({ url: 'pages/ImportConfigPage' });
+          this.pageStack.pushPath({ name: 'Import' });
         })
       }
     }
@@ -467,7 +502,7 @@ struct Index {
       .height(44)
       .padding({ left: SPACING.sm, right: SPACING.sm })
       .onClick(() => {
-        router.pushUrl({ url: 'pages/SettingsPage' });
+        this.pageStack.pushPath({ name: 'Settings' });
       })
     }
     .width('100%')
@@ -493,7 +528,7 @@ struct Index {
             .fontSize(24)
             .fontColor([$r('app.color.text_secondary')])
             .onClick(() => {
-              router.pushUrl({ url: 'pages/SettingsPage' });
+              this.pageStack.pushPath({ name: 'Settings' });
             })
         }
         .width('100%')
@@ -579,31 +614,28 @@ struct Index {
   }
 
   build() {
-    Stack() {
-      if (this.breakpoint === Breakpoint.COMPACT) {
-        this.CompactLayout()
-      } else if (this.breakpoint === Breakpoint.MEDIUM) {
-        this.MediumLayout()
-      } else {
-        this.ExpandedLayout()
+    Navigation(this.pageStack) {
+      Stack() {
+        if (this.breakpoint === Breakpoint.COMPACT) {
+          this.CompactLayout()
+        } else if (this.breakpoint === Breakpoint.MEDIUM) {
+          this.MediumLayout()
+        } else {
+          this.ExpandedLayout()
+        }
       }
+      .width('100%')
+      .height('100%')
+      .backgroundColor($r('app.color.background'))
+      .onAreaChange((_oldArea, newArea) => {
+        if (newArea.width > 0) {
+          this.windowWidth = this.getUIContext().px2vp(newArea.width as number);
+          this.breakpoint = getBreakpoint(this.windowWidth);
+        }
+      })
     }
-    .width('100%')
-    .height('100%')
-    .backgroundColor($r('app.color.background'))
-    .onAreaChange((_oldArea, newArea) => {
-      if (newArea.width > 0) {
-        this.windowWidth = this.getUIContext().px2vp(newArea.width as number);
-        this.breakpoint = getBreakpoint(this.windowWidth);
-      }
-    })
-  }
-
-  pageTransition() {
-    PageTransitionEnter({ duration: 250, curve: Curve.EaseOut })
-      .slide(SlideEffect.Right)
-      .opacity(0)
-    PageTransitionExit({ duration: 200, curve: Curve.EaseIn })
-      .opacity(1)
+    .mode(NavigationMode.Stack)
+    .hideTitleBar(true)
+    .navDestination(PageMap)
   }
 }
