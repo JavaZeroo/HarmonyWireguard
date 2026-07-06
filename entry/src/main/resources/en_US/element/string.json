@@ -1,6 +1,9 @@
 {
   "string": [
     { "name": "app_name", "value": "WireGuard" },
+    { "name": "theme_system", "value": "System" },
+    { "name": "theme_light", "value": "Light" },
+    { "name": "theme_dark", "value": "Dark" },
 
     { "name": "page_home", "value": "WireGuard" },
     { "name": "page_import_config", "value": "Add Configuration" },
