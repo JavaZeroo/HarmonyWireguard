@@ -123,6 +123,8 @@ struct SettingsPage {
       .backgroundColor($r('app.color.surface'))
 
       Scroll() {
+        // 居中 + 限宽，避免平板/2in1 上内容被拉得过宽
+        Column() {
         Column({ space: SPACING.md }) {
           // Appearance（放最前，主题切换是最常用的）
           SectionCard({ title: getString($r('app.string.section_appearance')) }) {
@@ -182,8 +184,11 @@ struct SettingsPage {
             .width('100%')
           }
         }
+        .constraintSize({ maxWidth: 720 })
         .width('100%')
         .padding({ left: SPACING.md, right: SPACING.md, top: SPACING.md, bottom: SPACING.xl })
+        }
+        .width('100%')
       }
       .width('100%')
       .layoutWeight(1)
