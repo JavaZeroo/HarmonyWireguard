@@ -290,6 +290,10 @@ struct Index {
             }
           })
           .margin({ left: SPACING.md, right: SPACING.md, top: SPACING.md })
+          .transition(TransitionEffect.OPACITY
+            .combine(TransitionEffect.scale({ x: 0.94, y: 0.94 }))
+            .combine(TransitionEffect.translate({ y: -10 }))
+            .animation({ duration: 350, curve: Curve.FastOutSlowIn }))
         }
 
         if (this.diagnostics.length > 0) {

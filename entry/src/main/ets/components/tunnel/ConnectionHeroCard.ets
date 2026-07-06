@@ -18,12 +18,44 @@ export struct ConnectionHeroCard {
 
   // 状态切换时给状态徽标一个"生长"动画，连接那一刻更有存在感
   @State private emblemScale: number = 1;
+  // 雷达脉冲：已连接/连接中时徽标外圈一圈圈扩散淡出，营造"在线/活着"的感知
+  @State private pulseScale: number = 0.95;
+  @State private pulseOpacity: number = 0.4;
+  private pulseStarted: boolean = false;
+
+  aboutToAppear(): void {
+    this.startPulseLoop();
+  }
+
+  private startPulseLoop(): void {
+    if (this.pulseStarted) {
+      return;
+    }
+    this.pulseStarted = true;
+    this.pulseScale = 0.95;
+    this.pulseOpacity = 0.4;
+    // 无限循环：0.95→1.6 扩散、0.4→0 淡出。脉冲圆仅在 live 状态渲染，其余时静默。
+    try {
+      this.getUIContext().animateTo({
+        duration: 1900, curve: Curve.EaseOut, iterations: -1, playMode: PlayMode.Normal
+      }, () => {
+        this.pulseScale = 1.6;
+        this.pulseOpacity = 0;
+      });
+    } catch (e) {
+      this.pulseOpacity = 0;
+    }
+  }
 
   onStatusChange(): void {
     this.emblemScale = 0.84;
     this.getUIContext().animateTo({ duration: 420, curve: Curve.Friction }, () => {
       this.emblemScale = 1;
     });
+  }
+
+  private isLive(): boolean {
+    return this.status === 'connected' || this.status === 'connecting';
   }
 
   private getStatusColor(): ResourceColor {
@@ -95,6 +127,16 @@ export struct ConnectionHeroCard {
   @Builder
   StatusEmblem() {
     Stack() {
+      // 雷达脉冲圈（仅 live 状态）
+      if (this.isLive()) {
+        Circle()
+          .width(128)
+          .height(128)
+          .fill(this.getStatusColor())
+          .opacity(this.pulseOpacity)
+          .scale({ x: this.pulseScale, y: this.pulseScale })
+      }
+
       // 底盘：状态色浅底圆
       Circle()
         .width(128)

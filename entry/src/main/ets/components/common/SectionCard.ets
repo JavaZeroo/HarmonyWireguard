@@ -8,7 +8,7 @@ export struct SectionCard {
   @Prop marginBottom: number = 0;
   @Prop cardPadding: number = SPACING.md;
   @Prop radius: number = RADIUS.lg;
-  @Prop showShadow: boolean = false;
+  @Prop showShadow: boolean = true;
 
   @BuilderParam
   contentBuilder: () => void = this.defaultContent;
