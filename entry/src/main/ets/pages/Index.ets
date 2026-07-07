@@ -346,10 +346,74 @@ struct Index {
     }
   }
 
+  // 手机端内容从钉住的玻璃标题栏下穿过 → 顶部留白；平板/2in1 标题栏在上方不重叠。
+  private topContentClearance(): number {
+    return this.breakpoint === Breakpoint.COMPACT ? 44 : SPACING.xs;
+  }
+
+  // 底部留白避开悬浮 Dock（Tab 胶囊 / 连接中 MiniBar，展开时更高）。
+  private bottomContentClearance(): number {
+    if (this.breakpoint !== Breakpoint.COMPACT) {
+      return SPACING.lg;
+    }
+    if (this.activeConfigId === '') {
+      return 92;
+    }
+    return this.miniExpanded ? 256 : 152;
+  }
+
+  // 「配置」分区标题：标题 + 数量，符合 HarmonyOS 列表分组头样式。
+  @Builder
+  ConfigSectionHeader() {
+    Row() {
+      Text(getString($r('app.string.section_configs')))
+        .fontSize(TYPOGRAPHY.title_sm.size)
+        .fontWeight(TYPOGRAPHY.title_sm.weight)
+        .fontColor($r('app.color.text_primary'))
+      Text(this.configs.length.toString())
+        .fontSize(TYPOGRAPHY.body_sm.size)
+        .fontColor($r('app.color.text_tertiary'))
+        .margin({ left: SPACING.sm })
+      Blank()
+    }
+    .width('100%')
+    .padding({ top: SPACING.xs, bottom: SPACING.xs })
+  }
+
+  @Builder
+  HeroListItem() {
+    ConnectionHeroCard({
+      status: this.activeStatus,
+      tunnelName: this.getActiveConfig()?.name || '',
+      endpoint: this.getActiveConfig()?.endpoint || '',
+      lastHandshakeAt: this.lastHandshakeAt,
+      rxBytes: this.rxBytes,
+      txBytes: this.txBytes,
+      onPrimaryAction: () => {
+        if (this.activeStatus === 'connected') {
+          const cfg = this.getActiveConfig();
+          if (cfg) this.toggleVpn(cfg, false);
+        } else if (this.activeStatus === 'disconnected' || this.activeStatus === 'failed') {
+          const cfg = this.getActiveConfig();
+          if (cfg) this.toggleVpn(cfg, true);
+        }
+      },
+      onDetail: () => {
+        this.openActiveDetail();
+      }
+    })
+    .transition(TransitionEffect.OPACITY
+      .combine(TransitionEffect.scale({ x: 0.94, y: 0.94 }))
+      .combine(TransitionEffect.translate({ y: -10 }))
+      .animation({ duration: 350, curve: Curve.FastOutSlowIn }))
+  }
+
+  // 隧道页内容：HarmonyOS 惯用 List（统一 8vp 栅格间距 + 页边距），
+  // 依次为当前连接 Hero、快速诊断、配置分组标题、配置卡片列表。
   @Builder
   ConfigListContent() {
-    Column() {
-      if (this.configs.length === 0) {
+    if (this.configs.length === 0) {
+      Column() {
         EmptyState({
           icon: 'wifi_slash',
           title: getString($r('app.string.empty_config_title')),
@@ -357,55 +421,35 @@ struct Index {
         }) {
           this.EmptyActionBuilder()
         }
-      } else {
+      }
+      .width('100%')
+      .height('100%')
+      .justifyContent(FlexAlign.Center)
+      .padding({ left: SPACING.lg, right: SPACING.lg, top: this.breakpoint === Breakpoint.COMPACT ? 52 : 0 })
+    } else {
+      List({ space: SPACING.md }) {
+        ListItem() {
+          Row().width('100%').height(this.topContentClearance())
+        }
+
         if (this.activeConfigId) {
-          ConnectionHeroCard({
-            status: this.activeStatus,
-            tunnelName: this.getActiveConfig()?.name || '',
-            endpoint: this.getActiveConfig()?.endpoint || '',
-            lastHandshakeAt: this.lastHandshakeAt,
-            rxBytes: this.rxBytes,
-            txBytes: this.txBytes,
-            onPrimaryAction: () => {
-              if (this.activeStatus === 'connected') {
-                const cfg = this.getActiveConfig();
-                if (cfg) this.toggleVpn(cfg, false);
-              } else if (this.activeStatus === 'disconnected' || this.activeStatus === 'failed') {
-                const cfg = this.getActiveConfig();
-                if (cfg) this.toggleVpn(cfg, true);
-              }
-            },
-            onDetail: () => {
-              const cfg = this.getActiveConfig();
-              if (!cfg) return;
-              if (this.breakpoint === Breakpoint.COMPACT) {
-                this.pageStack.pushPath({ name: 'TunnelDetail', param: cfg.id });
-              } else {
-                this.selectedConfigId = cfg.id;
-              }
-            }
-          })
-          .margin({ left: SPACING.md, right: SPACING.md, top: SPACING.md })
-          .transition(TransitionEffect.OPACITY
-            .combine(TransitionEffect.scale({ x: 0.94, y: 0.94 }))
-            .combine(TransitionEffect.translate({ y: -10 }))
-            .animation({ duration: 350, curve: Curve.FastOutSlowIn }))
+          ListItem() {
+            this.HeroListItem()
+          }
         }
 
         if (this.diagnostics.length > 0) {
-          DiagnosticSummaryCard({ items: this.diagnostics })
-            .margin({ left: SPACING.md, right: SPACING.md, top: SPACING.md })
+          ListItem() {
+            DiagnosticSummaryCard({ items: this.diagnostics })
+          }
         }
 
-        Text(getString($r('app.string.section_configs')))
-          .fontSize(TYPOGRAPHY.title_sm.size)
-          .fontWeight(TYPOGRAPHY.title_sm.weight)
-          .fontColor($r('app.color.text_primary'))
-          .width('100%')
-          .margin({ top: SPACING.lg, bottom: SPACING.sm, left: SPACING.md, right: SPACING.md })
+        ListItem() {
+          this.ConfigSectionHeader()
+        }
 
-        Column({ space: SPACING.sm }) {
-          ForEach(this.configs, (config: WgConfig) => {
+        ForEach(this.configs, (config: WgConfig) => {
+          ListItem() {
             TunnelListItem({
               config: config,
               status: config.id === this.activeConfigId ? this.activeStatus : 'disconnected',
@@ -424,14 +468,19 @@ struct Index {
                 this.toggleVpn(config, false);
               }
             })
-            .margin({ left: SPACING.md, right: SPACING.md })
-          }, (config: WgConfig) => config.id)
+          }
+        }, (config: WgConfig) => config.id)
+
+        ListItem() {
+          Row().width('100%').height(this.bottomContentClearance())
         }
-        .width('100%')
-        .padding({ bottom: 96 })
       }
+      .width('100%')
+      .height('100%')
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.Spring)
+      .padding({ left: SPACING.md, right: SPACING.md })
     }
-    .width('100%')
   }
 
   // 光感玻璃标题栏：品牌标识 + 毛玻璃材质，替代原纯色标题栏；手机端内容从其下穿过。
@@ -476,17 +525,8 @@ struct Index {
   @Builder
   CompactLayout() {
     Stack({ alignContent: Alignment.BottomEnd }) {
-      Scroll() {
-        Column() {
-          this.ConfigListContent()
-        }
-        .width('100%')
-        .padding({ top: 52 })
-      }
-      .width('100%')
-      .height('100%')
-      .scrollable(ScrollDirection.Vertical)
-      .scrollBar(BarState.Auto)
+      // List 自带滚动，内容从玻璃标题栏下穿过（顶部留白由 topContentClearance 处理）
+      this.ConfigListContent()
 
       if (this.configs.length > 0) {
         this.Fab()
@@ -527,13 +567,7 @@ struct Index {
 
       Row() {
         Stack({ alignContent: Alignment.BottomEnd }) {
-          Scroll() {
-            this.ConfigListContent()
-          }
-          .width('100%')
-          .height('100%')
-          .scrollable(ScrollDirection.Vertical)
-          .scrollBar(BarState.Auto)
+          this.ConfigListContent()
 
           if (this.configs.length > 0) {
             this.Fab()
