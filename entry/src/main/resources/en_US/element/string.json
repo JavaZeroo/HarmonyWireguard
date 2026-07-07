@@ -5,6 +5,7 @@
     { "name": "theme_light", "value": "Light" },
     { "name": "theme_dark", "value": "Dark" },
 
+    { "name": "tab_tunnels", "value": "Tunnels" },
     { "name": "page_home", "value": "WireGuard" },
     { "name": "page_import_config", "value": "Add Configuration" },
     { "name": "page_config_preview", "value": "Import Preview" },

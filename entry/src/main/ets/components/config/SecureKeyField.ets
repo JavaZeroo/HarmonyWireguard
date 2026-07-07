@@ -1,5 +1,5 @@
 import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
-import { SecureConfirmDialog } from '../common/SecureConfirmDialog';
+import { DialogHelper } from '../../common/DialogHelper';
 
 @Component
 export struct SecureKeyField {
@@ -12,25 +12,20 @@ export struct SecureKeyField {
   onReveal?: () => void;
 
   private revealTimer: number = -1;
-  private dialogController: CustomDialogController | null = null;
 
   private showRevealDialog(): void {
-    this.dialogController = new CustomDialogController({
-      builder: SecureConfirmDialog({
-        title: getString($r('app.string.dialog_reveal_key_title')),
-        message: getString($r('app.string.dialog_reveal_key_message')),
-        confirmText: getString($r('app.string.dialog_reveal_key_action')),
-        confirmColor: $r('app.color.warning'),
-        onConfirm: () => {
-          this.revealed = true;
-          this.onReveal?.();
-          this.startRevealTimer();
-        }
-      }),
-      autoCancel: true,
-      alignment: DialogAlignment.Center
+    DialogHelper.showConfirm(this.getUIContext(), {
+      title: getString($r('app.string.dialog_reveal_key_title')),
+      message: getString($r('app.string.dialog_reveal_key_message')),
+      confirmText: getString($r('app.string.dialog_reveal_key_action')),
+      confirmColor: $r('app.color.warning'),
+      secure: true,
+      onConfirm: () => {
+        this.revealed = true;
+        this.onReveal?.();
+        this.startRevealTimer();
+      }
     });
-    this.dialogController.open();
   }
 
   private startRevealTimer(): void {

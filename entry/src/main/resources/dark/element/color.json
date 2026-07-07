@@ -3,6 +3,7 @@
     { "name": "background", "value": "#121212" },
     { "name": "surface", "value": "#1E1E1E" },
     { "name": "surface_subtle", "value": "#252525" },
+    { "name": "glass_bar", "value": "#CC1E1E1E" },
     { "name": "text_primary", "value": "#E6FFFFFF" },
     { "name": "text_secondary", "value": "#99FFFFFF" },
     { "name": "text_tertiary", "value": "#66FFFFFF" },

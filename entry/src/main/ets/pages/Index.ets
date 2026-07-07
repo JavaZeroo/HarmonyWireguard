@@ -25,9 +25,7 @@ const TAG = 'IndexPage';
 // Navigation 目的地路由表（顶层 @Builder，navDestination 要求函数引用，不能内联 lambda）
 @Builder
 function PageMap(name: string, param: Object) {
-  if (name === 'Settings') {
-    NavDestination() { SettingsPage() }.hideTitleBar(true)
-  } else if (name === 'About') {
+  if (name === 'About') {
     NavDestination() { AboutPage() }.hideTitleBar(true)
   } else if (name === 'Import') {
     NavDestination() { ImportConfigPage() }.hideTitleBar(true)
@@ -74,6 +72,7 @@ struct Index {
   @State diagnostics: DiagnosticItem[] = [];
   @State breakpoint: Breakpoint = Breakpoint.COMPACT;
   @State windowWidth: number = 360;
+  @State currentTabIndex: number = 0;
 
   private unsubscribe?: () => void;
   private statusSubscriber: commonEventManager.CommonEventSubscriber | null = null;
@@ -374,29 +373,46 @@ struct Index {
   }
 
   @Builder
-  CompactLayout() {
+  MasterHeader() {
+    Row() {
+      Text(getString($r('app.string.page_home')))
+        .fontSize(TYPOGRAPHY.title_lg.size)
+        .fontWeight(TYPOGRAPHY.title_lg.weight)
+        .fontColor($r('app.color.text_primary'))
+    }
+    .width('100%')
+    .height(56)
+    .padding({ left: SPACING.md, right: SPACING.md })
+    .backgroundColor($r('app.color.surface'))
+  }
+
+  @Builder
+  Fab() {
+    Button() {
+      Text('+')
+        .fontSize(24)
+        .fontColor('#FFFFFF')
+    }
+    .width(56)
+    .height(56)
+    .backgroundColor($r('app.color.primary'))
+    .borderRadius(28)
+    .shadow({ radius: 8, color: 'rgba(0,0,0,0.20)', offsetY: 4 })
+    // 手机端底部 Tab 栏做了毛玻璃悬浮（barOverlap），FAB 需上抬避开
+    .margin({ right: SPACING.md, bottom: this.breakpoint === Breakpoint.COMPACT ? 72 : SPACING.lg })
+    .hoverEffect(HoverEffect.Scale)
+    .onClick(() => {
+      this.pageStack.pushPath({ name: 'Import' });
+    })
+  }
+
+  // 统一“主”栏：所有断点结构一致（标题栏 + 列表 + 添加 FAB）。
+  // 手机 = 整屏；平板 / 2in1 = 左栏。避免全屏 / 窗口两套 UX。
+  @Builder
+  MasterPane() {
     Stack({ alignContent: Alignment.BottomEnd }) {
       Column() {
-        // Header
-        Row() {
-          Text(getString($r('app.string.page_home')))
-            .fontSize(TYPOGRAPHY.title_lg.size)
-            .fontWeight(TYPOGRAPHY.title_lg.weight)
-            .fontColor($r('app.color.text_primary'))
-
-          Blank()
-
-          SymbolGlyph($r('sys.symbol.list_bullet'))
-            .fontSize(24)
-            .fontColor([$r('app.color.text_secondary')])
-            .onClick(() => {
-              this.pageStack.pushPath({ name: 'Settings' });
-            })
-        }
-        .width('100%')
-        .height(56)
-        .padding({ left: SPACING.md, right: SPACING.md })
-        .backgroundColor($r('app.color.surface'))
+        this.MasterHeader()
 
         Scroll() {
           this.ConfigListContent()
@@ -410,27 +426,18 @@ struct Index {
       .height('100%')
       .backgroundColor($r('app.color.background'))
 
-      // FAB only shown when there are configs
+      // 添加配置：所有断点都有，仅在有配置时显示（空态用引导按钮）
       if (this.configs.length > 0) {
-        Button() {
-          Text('+')
-            .fontSize(24)
-            .fontColor('#FFFFFF')
-        }
-        .width(56)
-        .height(56)
-        .backgroundColor($r('app.color.primary'))
-        .borderRadius(28)
-        .shadow({ radius: 8, color: 'rgba(0,0,0,0.20)', offsetY: 4 })
-        .margin({ right: SPACING.md, bottom: SPACING.lg })
-        .hoverEffect(HoverEffect.Scale)
-        .onClick(() => {
-          this.pageStack.pushPath({ name: 'Import' });
-        })
+        this.Fab()
       }
     }
     .width('100%')
     .height('100%')
+  }
+
+  @Builder
+  CompactLayout() {
+    this.MasterPane()
   }
 
   @Builder
@@ -447,182 +454,149 @@ struct Index {
     .backgroundColor($r('app.color.background'))
   }
 
+  // 平板 / 折叠屏 / 2in1：左“主”栏 + 右详情，与手机同一 master-detail 模型。
+  // 未手动选中时回退到当前连接的隧道，避免大屏右侧空置。
   @Builder
-  SidebarNavigation() {
-    Column() {
-      Text(getString($r('app.string.app_name')))
-        .fontSize(TYPOGRAPHY.title_sm.size)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
-        .width('100%')
-        .margin({ bottom: SPACING.lg })
-
-      List({ space: SPACING.sm }) {
-        ForEach(this.configs, (config: WgConfig) => {
-          ListItem() {
-            Row() {
-              SymbolGlyph($r('sys.symbol.wifi'))
-                .fontSize(20)
-                .fontColor([config.id === this.activeConfigId ? $r('app.color.primary') : $r('app.color.text_secondary')])
-                .margin({ right: SPACING.sm })
-
-              Text(config.name)
-                .fontSize(TYPOGRAPHY.body_sm.size)
-                .fontColor(config.id === this.activeConfigId ? $r('app.color.primary') : $r('app.color.text_primary'))
-                .layoutWeight(1)
-                .maxLines(1)
-                .textOverflow({ overflow: TextOverflow.Ellipsis })
-            }
-            .width('100%')
-            .height(44)
-            .padding({ left: SPACING.sm, right: SPACING.sm })
-            .backgroundColor(config.id === this.selectedConfigId ? $r('app.color.primary_bg') : 'transparent')
-            .borderRadius(8)
-            .onClick(() => {
-              this.selectedConfigId = config.id;
-            })
-          }
-        }, (config: WgConfig) => config.id)
+  SplitLayout(masterWidth: number) {
+    Row() {
+      Column() {
+        this.MasterPane()
       }
-      .width('100%')
-      .layoutWeight(1)
+      .width(masterWidth)
+      .height('100%')
 
-      Row() {
-        SymbolGlyph($r('sys.symbol.list_bullet'))
-          .fontSize(20)
-          .fontColor([$r('app.color.text_secondary')])
-          .margin({ right: SPACING.sm })
+      Divider()
+        .vertical(true)
+        .strokeWidth(1)
+        .color($r('app.color.divider'))
 
-        Text(getString($r('app.string.page_settings')))
+      if (this.selectedConfigId !== '') {
+        TunnelDetailPanel({ configId: this.selectedConfigId })
+          .layoutWeight(1)
+      } else if (this.activeConfigId !== '') {
+        TunnelDetailPanel({ configId: this.activeConfigId })
+          .layoutWeight(1)
+      } else {
+        Stack() {
+          this.DetailPlaceholder()
+        }
+        .layoutWeight(1)
+      }
+    }
+    .width('100%')
+    .height('100%')
+  }
+
+  // 手机底部胶囊项：未选中仅图标，选中态展开为品牌色填充胶囊（图标 + 文字）。
+  @Builder
+  CapsuleItemH(index: number, label: string, icon: Resource) {
+    Row({ space: 6 }) {
+      SymbolGlyph(icon)
+        .fontSize(22)
+        .fontColor([this.currentTabIndex === index ? $r('app.color.primary') : $r('app.color.text_secondary')])
+      if (this.currentTabIndex === index) {
+        Text(label)
           .fontSize(TYPOGRAPHY.body_sm.size)
-          .fontColor($r('app.color.text_secondary'))
-          .layoutWeight(1)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.primary'))
+          .maxLines(1)
       }
-      .width('100%')
-      .height(44)
-      .padding({ left: SPACING.sm, right: SPACING.sm })
-      .onClick(() => {
-        this.pageStack.pushPath({ name: 'Settings' });
-      })
     }
-    .width('100%')
-    .height('100%')
-    .padding(SPACING.md)
-    .backgroundColor($r('app.color.surface'))
+    .justifyContent(FlexAlign.Center)
+    .height(44)
+    .padding({ left: 16, right: 16 })
+    .backgroundColor(this.currentTabIndex === index ? $r('app.color.primary_bg') : Color.Transparent)
+    .borderRadius(22)
+    .hoverEffect(HoverEffect.Highlight)
+    .onClick(() => {
+      this.getUIContext().animateTo({ duration: 250, curve: Curve.FastOutSlowIn }, () => {
+        this.currentTabIndex = index;
+      });
+    })
   }
 
+  // 平板/2in1 侧栏胶囊项：图标 + 文字竖排，选中态填充胶囊。
   @Builder
-  MediumLayout() {
-    Row() {
-      Column() {
-        // Header
-        Row() {
-          Text(getString($r('app.string.page_home')))
-            .fontSize(TYPOGRAPHY.title_lg.size)
-            .fontWeight(TYPOGRAPHY.title_lg.weight)
-            .fontColor($r('app.color.text_primary'))
-
-          Blank()
-
-          SymbolGlyph($r('sys.symbol.list_bullet'))
-            .fontSize(24)
-            .fontColor([$r('app.color.text_secondary')])
-            .onClick(() => {
-              this.pageStack.pushPath({ name: 'Settings' });
-            })
-        }
-        .width('100%')
-        .height(56)
-        .padding({ left: SPACING.md, right: SPACING.md })
-        .backgroundColor($r('app.color.surface'))
-
-        Scroll() {
-          this.ConfigListContent()
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .scrollable(ScrollDirection.Vertical)
-        .scrollBar(BarState.Auto)
-      }
-      .width(320)
-      .height('100%')
-      .backgroundColor($r('app.color.background'))
-
-      Divider()
-        .vertical(true)
-        .strokeWidth(1)
-        .color($r('app.color.divider'))
-
-      if (this.selectedConfigId) {
-        TunnelDetailPanel({ configId: this.selectedConfigId })
-          .layoutWeight(1)
-      } else {
-        Stack() {
-          this.DetailPlaceholder()
-        }
-        .layoutWeight(1)
-      }
+  CapsuleItemV(index: number, label: string, icon: Resource) {
+    Column({ space: 2 }) {
+      SymbolGlyph(icon)
+        .fontSize(22)
+        .fontColor([this.currentTabIndex === index ? $r('app.color.primary') : $r('app.color.text_secondary')])
+      Text(label)
+        .fontSize(TYPOGRAPHY.caption.size)
+        .fontWeight(this.currentTabIndex === index ? FontWeight.Medium : FontWeight.Regular)
+        .fontColor(this.currentTabIndex === index ? $r('app.color.primary') : $r('app.color.text_secondary'))
+        .maxLines(1)
     }
-    .width('100%')
-    .height('100%')
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
+    .width(60)
+    .height(52)
+    .backgroundColor(this.currentTabIndex === index ? $r('app.color.primary_bg') : Color.Transparent)
+    .borderRadius(16)
+    .hoverEffect(HoverEffect.Highlight)
+    .onClick(() => {
+      this.getUIContext().animateTo({ duration: 250, curve: Curve.FastOutSlowIn }, () => {
+        this.currentTabIndex = index;
+      });
+    })
   }
 
+  // 沉浸光感悬浮「胶囊」导航：毛玻璃材质 + 投影 + 大圆角，脱离屏幕边缘悬浮。
+  // 手机底部居中横向；平板/2in1 左侧居中纵向。
   @Builder
-  ExpandedLayout() {
-    Row() {
-      Stack() {
-        this.SidebarNavigation()
+  CapsuleNav() {
+    if (this.breakpoint === Breakpoint.COMPACT) {
+      Row({ space: 4 }) {
+        this.CapsuleItemH(0, getString($r('app.string.tab_tunnels')), $r('sys.symbol.wifi'))
+        this.CapsuleItemH(1, getString($r('app.string.page_settings')), $r('sys.symbol.list_bullet'))
       }
-      .width(240)
-      .height('100%')
-
-      Divider()
-        .vertical(true)
-        .strokeWidth(1)
-        .color($r('app.color.divider'))
-
-      Column() {
-        Scroll() {
-          this.ConfigListContent()
-        }
-        .width('100%')
-        .layoutWeight(1)
-        .scrollable(ScrollDirection.Vertical)
-        .scrollBar(BarState.Auto)
+      .padding(6)
+      .backgroundColor($r('app.color.glass_bar'))
+      .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
+      .borderRadius(28)
+      .shadow({ radius: 20, color: 'rgba(0,0,0,0.18)', offsetY: 6 })
+      .margin({ bottom: 24 })
+    } else {
+      Column({ space: 4 }) {
+        this.CapsuleItemV(0, getString($r('app.string.tab_tunnels')), $r('sys.symbol.wifi'))
+        this.CapsuleItemV(1, getString($r('app.string.page_settings')), $r('sys.symbol.list_bullet'))
       }
-      .width(320)
-      .height('100%')
-      .backgroundColor($r('app.color.background'))
-
-      Divider()
-        .vertical(true)
-        .strokeWidth(1)
-        .color($r('app.color.divider'))
-
-      if (this.selectedConfigId) {
-        TunnelDetailPanel({ configId: this.selectedConfigId })
-          .layoutWeight(1)
-      } else {
-        Stack() {
-          this.DetailPlaceholder()
-        }
-        .layoutWeight(1)
-      }
+      .padding(6)
+      .backgroundColor($r('app.color.glass_bar'))
+      .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
+      .borderRadius(28)
+      .shadow({ radius: 20, color: 'rgba(0,0,0,0.18)', offsetY: 6 })
+      .margin({ left: 16 })
     }
-    .width('100%')
-    .height('100%')
   }
 
   build() {
     Navigation(this.pageStack) {
-      Stack() {
+      Stack({ alignContent: this.breakpoint === Breakpoint.COMPACT ? Alignment.Bottom : Alignment.Start }) {
+        // 主体内容（按当前 Tab 切换，二级页仍由 NavPathStack 全屏 push）
         if (this.breakpoint === Breakpoint.COMPACT) {
-          this.CompactLayout()
-        } else if (this.breakpoint === Breakpoint.MEDIUM) {
-          this.MediumLayout()
+          if (this.currentTabIndex === 0) {
+            this.CompactLayout()
+          } else {
+            SettingsPage({ embedded: true })
+          }
         } else {
-          this.ExpandedLayout()
+          // 平板/2in1：左侧留位给悬浮胶囊
+          Column() {
+            if (this.currentTabIndex === 0) {
+              this.SplitLayout(this.breakpoint === Breakpoint.MEDIUM ? 320 : 360)
+            } else {
+              SettingsPage({ embedded: true })
+            }
+          }
+          .width('100%')
+          .height('100%')
+          .padding({ left: 104 })
         }
+
+        // 沉浸光感悬浮胶囊导航
+        this.CapsuleNav()
       }
       .width('100%')
       .height('100%')

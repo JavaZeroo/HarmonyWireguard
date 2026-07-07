@@ -4,6 +4,7 @@ import type { WgConfig } from '../../model/WgConfig';
 import type { TunnelStatusType } from '../../model/WgConfig';
 import { StatusBadge } from '../common/StatusBadge';
 
+@Reusable
 @Component
 export struct TunnelListItem {
   @Prop config: WgConfig;

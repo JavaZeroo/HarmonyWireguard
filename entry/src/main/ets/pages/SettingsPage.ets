@@ -7,6 +7,8 @@ import type { ThemeMode } from '../service/SettingsService';
 @Component
 export struct SettingsPage {
   @Consume('pageStack') pageStack: NavPathStack;
+  // 作为「设置」Tab 内嵌时为 true：不显示返回箭头（Tab 无返回栈）。
+  @Prop embedded: boolean = false;
   @State currentTheme: ThemeMode = 'system';
   private themeOptions: ThemeMode[] = ['system', 'light', 'dark'];
 
@@ -99,13 +101,17 @@ export struct SettingsPage {
     Column() {
       // Header
       Row() {
-        SymbolGlyph($r('sys.symbol.chevron_left'))
-          .fontSize(24)
-          .fontColor([$r('app.color.text_primary')])
-          .hoverEffect(HoverEffect.Highlight)
-          .onClick(() => {
-            this.pageStack.pop();
-          })
+        if (!this.embedded) {
+          SymbolGlyph($r('sys.symbol.chevron_left'))
+            .fontSize(24)
+            .fontColor([$r('app.color.text_primary')])
+            .hoverEffect(HoverEffect.Highlight)
+            .onClick(() => {
+              this.pageStack.pop();
+            })
+        } else {
+          Blank().width(24)
+        }
 
         Text(getString($r('app.string.page_settings')))
           .fontSize(TYPOGRAPHY.title_sm.size)
@@ -185,7 +191,8 @@ export struct SettingsPage {
         }
         .constraintSize({ maxWidth: 720 })
         .width('100%')
-        .padding({ left: SPACING.md, right: SPACING.md, top: SPACING.md, bottom: SPACING.xl })
+        // 底部留白避开毛玻璃 Tab 栏（barOverlap）
+        .padding({ left: SPACING.md, right: SPACING.md, top: SPACING.md, bottom: 88 })
         }
         .width('100%')
       }

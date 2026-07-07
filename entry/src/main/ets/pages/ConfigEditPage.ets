@@ -8,7 +8,7 @@ import { KeyField } from '../components/config/KeyField';
 import { EndpointInput } from '../components/config/EndpointInput';
 import { RouteModeSelector } from '../components/config/RouteModeSelector';
 import { AdvancedSection } from '../components/config/AdvancedSection';
-import { SecureConfirmDialog } from '../components/common/SecureConfirmDialog';
+import { DialogHelper } from '../common/DialogHelper';
 import { validateBase64Key, validateEndpoint, validateCidr, validateDns, validateMtu } from '../common/Validators';
 
 interface FormErrors {
@@ -46,8 +46,6 @@ export struct ConfigEditPage {
   @State blockIpv6Leak: boolean = false;
   @State allowLanAccess: boolean = false;
   @State appeared: boolean = false;
-
-  private deleteDialogController: CustomDialogController | null = null;
 
   aboutToAppear(): void {
     // navParam 有值(来自预览页的 WgConfig)则编辑它，否则新建
@@ -127,19 +125,15 @@ export struct ConfigEditPage {
   }
 
   private showDeleteDialog(): void {
-    this.deleteDialogController = new CustomDialogController({
-      builder: SecureConfirmDialog({
-        title: getString($r('app.string.dialog_delete_config_title')),
-        message: getString($r('app.string.dialog_delete_config_message')),
-        confirmText: getString($r('app.string.button_delete')),
-        onConfirm: () => {
-          this.deleteConfig();
-        }
-      }),
-      autoCancel: true,
-      alignment: DialogAlignment.Center
+    DialogHelper.showConfirm(this.getUIContext(), {
+      title: getString($r('app.string.dialog_delete_config_title')),
+      message: getString($r('app.string.dialog_delete_config_message')),
+      confirmText: getString($r('app.string.button_delete')),
+      secure: true,
+      onConfirm: () => {
+        this.deleteConfig();
+      }
     });
-    this.deleteDialogController.open();
   }
 
   private getError(key: string): string {
