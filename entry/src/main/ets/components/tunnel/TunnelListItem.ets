@@ -4,7 +4,6 @@ import type { WgConfig } from '../../model/WgConfig';
 import type { TunnelStatusType } from '../../model/WgConfig';
 import { StatusBadge } from '../common/StatusBadge';
 
-@Reusable
 @Component
 export struct TunnelListItem {
   @Prop config: WgConfig;
@@ -119,6 +118,11 @@ export struct TunnelListItem {
       Toggle({ type: ToggleType.Switch, isOn: this.isLive() })
         .selectedColor($r('app.color.primary'))
         .onChange((isOn: boolean) => {
+          // 防抖：仅当开关目标态与当前运行态真正不一致时才触发，
+          // 避免重渲染/状态同步导致的伪 onChange 造成“连上又立刻断开”。
+          if (isOn === this.isLive()) {
+            return;
+          }
           if (isOn) {
             this.onConnect?.();
           } else {

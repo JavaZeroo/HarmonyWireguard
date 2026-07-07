@@ -185,6 +185,34 @@ export function buildWgConfigFromParsed(parsed: ParsedWireGuardConfig, id?: stri
   };
 }
 
+// 连接开关的当前上下文（用于过滤伪/矛盾的开关回调）。
+export interface ToggleContext {
+  activeConfigId: string;
+  connectingId: string;
+  activeStatus: string;
+}
+
+// 判断某次「连接/断开」动作是否应真正执行。
+// 过滤掉：正在连接时的重复连接、对未激活配置的断开等——这些多由 UI 复用/重渲染
+// 产生的伪 onChange 触发，若不拦截会导致「连上又立刻断开」。
+export function shouldApplyToggle(configId: string, enable: boolean, ctx: ToggleContext): boolean {
+  if (enable) {
+    if (ctx.connectingId !== '') {
+      return false; // 已有连接进行中
+    }
+    if (ctx.activeConfigId === configId &&
+      (ctx.activeStatus === 'connected' || ctx.activeStatus === 'connecting')) {
+      return false; // 该配置已连接/连接中
+    }
+    return true;
+  }
+  // 断开：仅当该配置确为当前激活/正在连接的配置时才执行
+  if (ctx.activeConfigId !== configId && ctx.connectingId !== configId) {
+    return false;
+  }
+  return true;
+}
+
 export function formatEndpointShort(endpoint: string, maxLen: number = 24): string {
   if (!endpoint) return '';
   if (endpoint.length <= maxLen) return endpoint;

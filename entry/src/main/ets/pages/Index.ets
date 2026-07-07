@@ -11,6 +11,8 @@ import { ConfigPreviewPage } from './ConfigPreviewPage';
 import { TunnelDetailPage } from './TunnelDetailPage';
 import { APP_CONSTANTS } from '../common/Constants';
 import { SPACING, TYPOGRAPHY, Breakpoint, getBreakpoint, getString } from '../common/DesignSystem';
+import { formatBytes } from '../common/Formatters';
+import { shouldApplyToggle, ToggleContext } from '../common/Utils';
 import { ConnectionHeroCard } from '../components/tunnel/ConnectionHeroCard';
 import { TunnelListItem } from '../components/tunnel/TunnelListItem';
 import { EmptyState } from '../components/common/EmptyState';
@@ -71,6 +73,7 @@ struct Index {
   @State breakpoint: Breakpoint = Breakpoint.COMPACT;
   @State windowWidth: number = 360;
   @State currentTabIndex: number = 0;
+  @State miniExpanded: boolean = false;
 
   private unsubscribe?: () => void;
   private statusSubscriber: commonEventManager.CommonEventSubscriber | null = null;
@@ -206,6 +209,17 @@ struct Index {
     hilog.info(APP_CONSTANTS.DOMAIN, TAG,
       '>>> toggleVpn[v3] config=%{public}s enable=%{public}s',
       config.name, String(enable));
+    // 防抖/防冲突：过滤伪/矛盾的开关调用（修复“连上又立刻断开”）。
+    // 判定逻辑抽到 Utils.shouldApplyToggle，便于单元测试覆盖。
+    const toggleCtx: ToggleContext = {
+      activeConfigId: this.activeConfigId,
+      connectingId: this.connectingId,
+      activeStatus: this.activeStatus
+    };
+    if (!shouldApplyToggle(config.id, enable, toggleCtx)) {
+      hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'toggleVpn ignored (guard): enable=%{public}s', String(enable));
+      return;
+    }
     if (enable) {
       this.connectingId = config.id;
       this.activeStatus = 'connecting';
@@ -452,8 +466,8 @@ struct Index {
     .backgroundColor($r('app.color.primary'))
     .borderRadius(28)
     .shadow({ radius: 8, color: 'rgba(0,0,0,0.20)', offsetY: 4 })
-    // 上抬避开底部悬浮胶囊导航 / 连接中 MiniBar
-    .margin({ right: SPACING.md, bottom: this.breakpoint === Breakpoint.COMPACT ? (this.activeConfigId !== '' ? 152 : 72) : SPACING.lg })
+    // 上抬避开底部悬浮 Dock（Tab 胶囊 / 连接中 MiniBar，展开时更高）
+    .margin({ right: SPACING.md, bottom: this.breakpoint === Breakpoint.COMPACT ? (this.activeConfigId !== '' ? (this.miniExpanded ? 264 : 160) : 72) : SPACING.lg })
     .hoverEffect(HoverEffect.Scale)
     .bindMenu(this.importMenuItems())
   }
@@ -609,84 +623,172 @@ struct Index {
     })
   }
 
-  // 沉浸光感悬浮「胶囊」导航：毛玻璃材质 + 投影 + 大圆角，脱离屏幕边缘悬浮。
-  // 手机底部居中横向；平板/2in1 左侧居中纵向。
+  // 手机底部横向胶囊 Tab 栏
   @Builder
-  CapsuleNav() {
-    if (this.breakpoint === Breakpoint.COMPACT) {
-      Row({ space: 4 }) {
-        this.CapsuleItemH(0, getString($r('app.string.tab_tunnels')), $r('sys.symbol.wifi'))
-        this.CapsuleItemH(1, getString($r('app.string.page_settings')), $r('sys.symbol.list_bullet'))
-      }
-      .padding(6)
-      .backgroundColor($r('app.color.glass_bar'))
-      .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
-      .borderRadius(28)
-      .shadow({ radius: 20, color: 'rgba(0,0,0,0.18)', offsetY: 6 })
-      .margin({ bottom: 24 })
-    } else {
-      Column({ space: 4 }) {
-        this.CapsuleItemV(0, getString($r('app.string.tab_tunnels')), $r('sys.symbol.wifi'))
-        this.CapsuleItemV(1, getString($r('app.string.page_settings')), $r('sys.symbol.list_bullet'))
-      }
-      .padding(6)
-      .backgroundColor($r('app.color.glass_bar'))
-      .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
-      .borderRadius(28)
-      .shadow({ radius: 20, color: 'rgba(0,0,0,0.18)', offsetY: 6 })
-      .margin({ left: 16 })
+  TabCapsuleH() {
+    Row({ space: 4 }) {
+      this.CapsuleItemH(0, getString($r('app.string.tab_tunnels')), $r('sys.symbol.wifi'))
+      this.CapsuleItemH(1, getString($r('app.string.page_settings')), $r('sys.symbol.list_bullet'))
     }
-  }
-
-  // 连接中悬浮 MiniBar：状态点 + 隧道名 + 状态文案，点击进入详情。玻璃材质悬浮。
-  @Builder
-  MiniBar() {
-    Row({ space: SPACING.sm }) {
-      Column()
-        .width(10)
-        .height(10)
-        .borderRadius(5)
-        .backgroundColor(this.statusColorRes())
-
-      Column() {
-        Text(this.getActiveConfig()?.name ?? '')
-          .fontSize(TYPOGRAPHY.body_sm.size)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.statusTextLabel())
-          .fontSize(TYPOGRAPHY.caption.size)
-          .fontColor($r('app.color.text_secondary'))
-          .maxLines(1)
-      }
-      .alignItems(HorizontalAlign.Start)
-      .layoutWeight(1)
-
-      SymbolGlyph($r('sys.symbol.chevron_right'))
-        .fontSize(18)
-        .fontColor([$r('app.color.text_tertiary')])
-    }
-    .width('100%')
-    .height(56)
-    .constraintSize({ maxWidth: 480 })
-    .padding({ left: SPACING.md, right: SPACING.md })
+    .padding(6)
     .backgroundColor($r('app.color.glass_bar'))
     .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
     .borderRadius(28)
     .shadow({ radius: 20, color: 'rgba(0,0,0,0.18)', offsetY: 6 })
-    .hoverEffect(HoverEffect.Highlight)
-    .onClick(() => {
-      const cfg = this.getActiveConfig();
-      if (!cfg) {
-        return;
+  }
+
+  // 平板/2in1 左侧纵向胶囊 Tab 栏
+  @Builder
+  TabCapsuleV() {
+    Column({ space: 4 }) {
+      this.CapsuleItemV(0, getString($r('app.string.tab_tunnels')), $r('sys.symbol.wifi'))
+      this.CapsuleItemV(1, getString($r('app.string.page_settings')), $r('sys.symbol.list_bullet'))
+    }
+    .padding(6)
+    .backgroundColor($r('app.color.glass_bar'))
+    .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
+    .borderRadius(28)
+    .shadow({ radius: 20, color: 'rgba(0,0,0,0.18)', offsetY: 6 })
+    .margin({ left: 16 })
+  }
+
+  private openActiveDetail(): void {
+    const cfg = this.getActiveConfig();
+    if (!cfg) {
+      return;
+    }
+    if (this.breakpoint === Breakpoint.COMPACT) {
+      this.pageStack.pushPath({ name: 'TunnelDetail', param: cfg.id });
+    } else {
+      this.selectedConfigId = cfg.id;
+    }
+  }
+
+  // 连接中可折叠 MiniBar：折叠=紧凑控制条（状态点+名称+断开）；
+  // 展开=完整信息（Endpoint/实时流量/详情）。嵌于底部导航之上，空间高效。
+  @Builder
+  MiniBar() {
+    Column() {
+      // 折叠态紧凑控制条（始终显示）
+      Row({ space: SPACING.sm }) {
+        Column()
+          .width(10)
+          .height(10)
+          .borderRadius(5)
+          .backgroundColor(this.statusColorRes())
+
+        Column() {
+          Text(this.getActiveConfig()?.name ?? '')
+            .fontSize(TYPOGRAPHY.body_sm.size)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.text_primary'))
+            .maxLines(1)
+            .textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.statusTextLabel())
+            .fontSize(TYPOGRAPHY.caption.size)
+            .fontColor($r('app.color.text_secondary'))
+            .maxLines(1)
+        }
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
+        .onClick(() => {
+          this.openActiveDetail();
+        })
+
+        Button(getString($r('app.string.button_disconnect')))
+          .fontSize(TYPOGRAPHY.caption.size)
+          .fontColor($r('app.color.danger'))
+          .backgroundColor($r('app.color.danger_bg'))
+          .height(32)
+          .padding({ left: SPACING.md, right: SPACING.md })
+          .borderRadius(16)
+          .onClick(() => {
+            const cfg = this.getActiveConfig();
+            if (cfg) {
+              this.toggleVpn(cfg, false);
+            }
+          })
+
+        SymbolGlyph($r('sys.symbol.chevron_right'))
+          .fontSize(18)
+          .fontColor([$r('app.color.text_tertiary')])
+          .rotate({ angle: this.miniExpanded ? 90 : -90 })
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.getUIContext().animateTo({ duration: 250, curve: Curve.FastOutSlowIn }, () => {
+              this.miniExpanded = !this.miniExpanded;
+            });
+          })
       }
-      if (this.breakpoint === Breakpoint.COMPACT) {
-        this.pageStack.pushPath({ name: 'TunnelDetail', param: cfg.id });
-      } else {
-        this.selectedConfigId = cfg.id;
+      .width('100%')
+      .height(56)
+
+      // 展开态：完整信息 + 控制
+      if (this.miniExpanded) {
+        Column({ space: SPACING.xs }) {
+          Divider()
+            .color($r('app.color.divider'))
+
+          Row() {
+            Text(getString($r('app.string.field_endpoint_host')))
+              .fontSize(TYPOGRAPHY.caption.size)
+              .fontColor($r('app.color.text_tertiary'))
+            Blank()
+            Text(this.getActiveConfig()?.endpoint ?? '')
+              .fontSize(TYPOGRAPHY.caption.size)
+              .fontColor($r('app.color.text_secondary'))
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .width('100%')
+
+          Row() {
+            Text('↓ ' + formatBytes(this.rxBytes))
+              .fontSize(TYPOGRAPHY.caption.size)
+              .fontColor($r('app.color.text_secondary'))
+            Blank()
+            Text('↑ ' + formatBytes(this.txBytes))
+              .fontSize(TYPOGRAPHY.caption.size)
+              .fontColor($r('app.color.text_secondary'))
+          }
+          .width('100%')
+
+          Button(getString($r('app.string.button_detail')))
+            .width('100%')
+            .height(36)
+            .fontSize(TYPOGRAPHY.body_sm.size)
+            .backgroundColor($r('app.color.surface_subtle'))
+            .fontColor($r('app.color.primary'))
+            .onClick(() => {
+              this.openActiveDetail();
+            })
+        }
+        .width('100%')
+        .padding({ top: SPACING.xs, bottom: SPACING.sm })
       }
-    })
+    }
+    .width('100%')
+    .constraintSize({ maxWidth: 480 })
+    .padding({ left: SPACING.md, right: SPACING.md })
+    .backgroundColor($r('app.color.glass_bar'))
+    .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
+    .borderRadius(24)
+    .shadow({ radius: 20, color: 'rgba(0,0,0,0.18)', offsetY: 6 })
+  }
+
+  // 底部导航组合：可折叠 MiniBar（连接中）+ Tab 胶囊，作为一个悬浮单元。
+  @Builder
+  BottomDock() {
+    Column({ space: 10 }) {
+      if (this.activeConfigId !== '') {
+        this.MiniBar()
+      }
+      this.TabCapsuleH()
+    }
+    .alignItems(HorizontalAlign.Center)
+    .width('92%')
+    .constraintSize({ maxWidth: 480 })
+    .margin({ bottom: 24 })
   }
 
   build() {
@@ -713,25 +815,25 @@ struct Index {
           .padding({ left: 104 })
         }
 
-        // 连接中悬浮 MiniBar（有活动连接时，浮于胶囊导航之上）
-        if (this.activeConfigId !== '') {
-          Column() {
-            this.MiniBar()
+        // 底部导航：手机端 = MiniBar + Tab 胶囊组合悬浮单元（居中底部）
+        if (this.breakpoint === Breakpoint.COMPACT) {
+          this.BottomDock()
+        } else {
+          // 平板/2in1：左侧纵向胶囊 Tab 栏
+          this.TabCapsuleV()
+          // 连接中 MiniBar 浮于内容区底部居中
+          if (this.activeConfigId !== '') {
+            Column() {
+              this.MiniBar()
+            }
+            .width('100%')
+            .height('100%')
+            .justifyContent(FlexAlign.End)
+            .alignItems(HorizontalAlign.Center)
+            .padding({ left: 120, right: 16, bottom: 24 })
+            .hitTestBehavior(HitTestMode.Transparent)
           }
-          .width('100%')
-          .height('100%')
-          .justifyContent(FlexAlign.End)
-          .alignItems(HorizontalAlign.Center)
-          .padding({
-            left: this.breakpoint === Breakpoint.COMPACT ? 16 : 120,
-            right: 16,
-            bottom: this.breakpoint === Breakpoint.COMPACT ? 88 : 24
-          })
-          .hitTestBehavior(HitTestMode.Transparent)
         }
-
-        // 沉浸光感悬浮胶囊导航
-        this.CapsuleNav()
       }
       .width('100%')
       .height('100%')
