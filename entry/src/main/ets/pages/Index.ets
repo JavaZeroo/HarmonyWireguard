@@ -6,7 +6,6 @@ import { configManager } from '../service/ConfigManager';
 import type { WgConfig, TunnelStatusType, WgStatusPayload } from '../model/WgConfig';
 import { SettingsPage } from './SettingsPage';
 import { AboutPage } from './AboutPage';
-import { ImportConfigPage } from './ImportConfigPage';
 import { ConfigEditPage } from './ConfigEditPage';
 import { ConfigPreviewPage } from './ConfigPreviewPage';
 import { TunnelDetailPage } from './TunnelDetailPage';
@@ -19,6 +18,7 @@ import { DiagnosticSummaryCard } from '../components/tunnel/DiagnosticSummaryCar
 import type { DiagnosticItem } from '../model/WgConfig';
 import { tunnelRuntimeService } from '../service/TunnelRuntimeService';
 import { TunnelDetailPanel } from '../components/tunnel/TunnelDetailPanel';
+import { ImportActions } from '../service/ImportActions';
 
 const TAG = 'IndexPage';
 
@@ -27,8 +27,6 @@ const TAG = 'IndexPage';
 function PageMap(name: string, param: Object) {
   if (name === 'About') {
     NavDestination() { AboutPage() }.hideTitleBar(true)
-  } else if (name === 'Import') {
-    NavDestination() { ImportConfigPage() }.hideTitleBar(true)
   } else if (name === 'ConfigEdit') {
     NavDestination() { ConfigEditPage({ navParam: param }) }.hideTitleBar(true)
   } else if (name === 'ConfigPreview') {
@@ -260,7 +258,7 @@ struct Index {
         .width('60%')
         .height(44)
         .onClick(() => {
-          this.pageStack.pushPath({ name: 'Import' });
+          ImportActions.scanQR(this.getUIContext(), this.pageStack);
         })
 
       Button(getString($r('app.string.button_import_file')))
@@ -269,7 +267,7 @@ struct Index {
         .backgroundColor($r('app.color.surface_subtle'))
         .fontColor($r('app.color.primary'))
         .onClick(() => {
-          this.pageStack.pushPath({ name: 'Import' });
+          ImportActions.fromFile(this.getUIContext(), this.pageStack);
         })
 
       Button(getString($r('app.string.button_create_manual')))
@@ -278,10 +276,60 @@ struct Index {
         .backgroundColor($r('app.color.surface_subtle'))
         .fontColor($r('app.color.primary'))
         .onClick(() => {
-          this.pageStack.pushPath({ name: 'ConfigEdit' });
+          ImportActions.manualCreate(this.pageStack);
         })
     }
     .width('100%')
+  }
+
+  // FAB「添加配置」菜单项：改为下拉菜单（沉浸光感原生 Menu），不再整页跳转。
+  private importMenuItems(): MenuElement[] {
+    const ctx = this.getUIContext();
+    const stack = this.pageStack;
+    return [
+      {
+        value: getString($r('app.string.button_scan_qr')),
+        action: () => { ImportActions.scanQR(ctx, stack); }
+      },
+      {
+        value: getString($r('app.string.button_import_file')),
+        action: () => { ImportActions.fromFile(ctx, stack); }
+      },
+      {
+        value: getString($r('app.string.button_import_clipboard')),
+        action: () => { ImportActions.fromClipboard(ctx, stack); }
+      },
+      {
+        value: getString($r('app.string.button_create_manual')),
+        action: () => { ImportActions.manualCreate(stack); }
+      }
+    ];
+  }
+
+  private statusColorRes(): ResourceColor {
+    switch (this.activeStatus) {
+      case 'connected':
+        return $r('app.color.success');
+      case 'connecting':
+        return $r('app.color.primary');
+      case 'failed':
+        return $r('app.color.danger');
+      default:
+        return $r('app.color.text_tertiary');
+    }
+  }
+
+  private statusTextLabel(): string {
+    switch (this.activeStatus) {
+      case 'connected':
+        return getString($r('app.string.status_connected'));
+      case 'connecting':
+        return getString($r('app.string.status_connecting'));
+      case 'failed':
+        return getString($r('app.string.status_failed'));
+      default:
+        return getString($r('app.string.status_disconnected'));
+    }
   }
 
   @Builder
@@ -372,18 +420,24 @@ struct Index {
     .width('100%')
   }
 
+  // 光感玻璃标题栏：品牌标识 + 毛玻璃材质，替代原纯色标题栏；手机端内容从其下穿过。
   @Builder
-  MasterHeader() {
+  TopBar() {
     Row() {
+      SymbolGlyph($r('sys.symbol.wifi'))
+        .fontSize(22)
+        .fontColor([$r('app.color.primary')])
       Text(getString($r('app.string.page_home')))
-        .fontSize(TYPOGRAPHY.title_lg.size)
-        .fontWeight(TYPOGRAPHY.title_lg.weight)
+        .fontSize(TYPOGRAPHY.title_md.size)
+        .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
+        .margin({ left: SPACING.sm })
     }
     .width('100%')
-    .height(56)
-    .padding({ left: SPACING.md, right: SPACING.md })
-    .backgroundColor($r('app.color.surface'))
+    .height(52)
+    .padding({ left: SPACING.lg, right: SPACING.lg })
+    .backgroundColor($r('app.color.glass_bar'))
+    .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
   }
 
   @Builder
@@ -398,46 +452,42 @@ struct Index {
     .backgroundColor($r('app.color.primary'))
     .borderRadius(28)
     .shadow({ radius: 8, color: 'rgba(0,0,0,0.20)', offsetY: 4 })
-    // 手机端底部 Tab 栏做了毛玻璃悬浮（barOverlap），FAB 需上抬避开
-    .margin({ right: SPACING.md, bottom: this.breakpoint === Breakpoint.COMPACT ? 72 : SPACING.lg })
+    // 上抬避开底部悬浮胶囊导航 / 连接中 MiniBar
+    .margin({ right: SPACING.md, bottom: this.breakpoint === Breakpoint.COMPACT ? (this.activeConfigId !== '' ? 152 : 72) : SPACING.lg })
     .hoverEffect(HoverEffect.Scale)
-    .onClick(() => {
-      this.pageStack.pushPath({ name: 'Import' });
-    })
+    .bindMenu(this.importMenuItems())
   }
 
-  // 统一“主”栏：所有断点结构一致（标题栏 + 列表 + 添加 FAB）。
-  // 手机 = 整屏；平板 / 2in1 = 左栏。避免全屏 / 窗口两套 UX。
+  // 手机整屏：内容从光感玻璃标题栏下穿过，FAB 悬浮右下。
   @Builder
-  MasterPane() {
+  CompactLayout() {
     Stack({ alignContent: Alignment.BottomEnd }) {
-      Column() {
-        this.MasterHeader()
-
-        Scroll() {
+      Scroll() {
+        Column() {
           this.ConfigListContent()
         }
         .width('100%')
-        .layoutWeight(1)
-        .scrollable(ScrollDirection.Vertical)
-        .scrollBar(BarState.Auto)
+        .padding({ top: 52 })
       }
       .width('100%')
       .height('100%')
-      .backgroundColor($r('app.color.background'))
+      .scrollable(ScrollDirection.Vertical)
+      .scrollBar(BarState.Auto)
 
-      // 添加配置：所有断点都有，仅在有配置时显示（空态用引导按钮）
       if (this.configs.length > 0) {
         this.Fab()
       }
+
+      // 光感玻璃标题栏钉在顶部
+      Column() {
+        this.TopBar()
+      }
+      .width('100%')
+      .position({ x: 0, y: 0 })
     }
     .width('100%')
     .height('100%')
-  }
-
-  @Builder
-  CompactLayout() {
-    this.MasterPane()
+    .backgroundColor($r('app.color.background'))
   }
 
   @Builder
@@ -454,34 +504,51 @@ struct Index {
     .backgroundColor($r('app.color.background'))
   }
 
-  // 平板 / 折叠屏 / 2in1：左“主”栏 + 右详情，与手机同一 master-detail 模型。
-  // 未手动选中时回退到当前连接的隧道，避免大屏右侧空置。
+  // 平板 / 折叠屏 / 2in1：顶部全宽光感标题栏 + 下方左“主”栏右详情。
+  // 全宽标题栏解决全屏时标题被挤在窄列里的问题；未手动选中时回退到当前连接的隧道。
   @Builder
   SplitLayout(masterWidth: number) {
-    Row() {
-      Column() {
-        this.MasterPane()
-      }
-      .width(masterWidth)
-      .height('100%')
+    Column() {
+      this.TopBar()
 
-      Divider()
-        .vertical(true)
-        .strokeWidth(1)
-        .color($r('app.color.divider'))
+      Row() {
+        Stack({ alignContent: Alignment.BottomEnd }) {
+          Scroll() {
+            this.ConfigListContent()
+          }
+          .width('100%')
+          .height('100%')
+          .scrollable(ScrollDirection.Vertical)
+          .scrollBar(BarState.Auto)
 
-      if (this.selectedConfigId !== '') {
-        TunnelDetailPanel({ configId: this.selectedConfigId })
-          .layoutWeight(1)
-      } else if (this.activeConfigId !== '') {
-        TunnelDetailPanel({ configId: this.activeConfigId })
-          .layoutWeight(1)
-      } else {
-        Stack() {
-          this.DetailPlaceholder()
+          if (this.configs.length > 0) {
+            this.Fab()
+          }
         }
-        .layoutWeight(1)
+        .width(masterWidth)
+        .height('100%')
+        .backgroundColor($r('app.color.background'))
+
+        Divider()
+          .vertical(true)
+          .strokeWidth(1)
+          .color($r('app.color.divider'))
+
+        if (this.selectedConfigId !== '') {
+          TunnelDetailPanel({ configId: this.selectedConfigId })
+            .layoutWeight(1)
+        } else if (this.activeConfigId !== '') {
+          TunnelDetailPanel({ configId: this.activeConfigId })
+            .layoutWeight(1)
+        } else {
+          Stack() {
+            this.DetailPlaceholder()
+          }
+          .layoutWeight(1)
+        }
       }
+      .width('100%')
+      .layoutWeight(1)
     }
     .width('100%')
     .height('100%')
@@ -571,6 +638,57 @@ struct Index {
     }
   }
 
+  // 连接中悬浮 MiniBar：状态点 + 隧道名 + 状态文案，点击进入详情。玻璃材质悬浮。
+  @Builder
+  MiniBar() {
+    Row({ space: SPACING.sm }) {
+      Column()
+        .width(10)
+        .height(10)
+        .borderRadius(5)
+        .backgroundColor(this.statusColorRes())
+
+      Column() {
+        Text(this.getActiveConfig()?.name ?? '')
+          .fontSize(TYPOGRAPHY.body_sm.size)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.text_primary'))
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(this.statusTextLabel())
+          .fontSize(TYPOGRAPHY.caption.size)
+          .fontColor($r('app.color.text_secondary'))
+          .maxLines(1)
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+
+      SymbolGlyph($r('sys.symbol.chevron_right'))
+        .fontSize(18)
+        .fontColor([$r('app.color.text_tertiary')])
+    }
+    .width('100%')
+    .height(56)
+    .constraintSize({ maxWidth: 480 })
+    .padding({ left: SPACING.md, right: SPACING.md })
+    .backgroundColor($r('app.color.glass_bar'))
+    .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
+    .borderRadius(28)
+    .shadow({ radius: 20, color: 'rgba(0,0,0,0.18)', offsetY: 6 })
+    .hoverEffect(HoverEffect.Highlight)
+    .onClick(() => {
+      const cfg = this.getActiveConfig();
+      if (!cfg) {
+        return;
+      }
+      if (this.breakpoint === Breakpoint.COMPACT) {
+        this.pageStack.pushPath({ name: 'TunnelDetail', param: cfg.id });
+      } else {
+        this.selectedConfigId = cfg.id;
+      }
+    })
+  }
+
   build() {
     Navigation(this.pageStack) {
       Stack({ alignContent: this.breakpoint === Breakpoint.COMPACT ? Alignment.Bottom : Alignment.Start }) {
@@ -593,6 +711,23 @@ struct Index {
           .width('100%')
           .height('100%')
           .padding({ left: 104 })
+        }
+
+        // 连接中悬浮 MiniBar（有活动连接时，浮于胶囊导航之上）
+        if (this.activeConfigId !== '') {
+          Column() {
+            this.MiniBar()
+          }
+          .width('100%')
+          .height('100%')
+          .justifyContent(FlexAlign.End)
+          .alignItems(HorizontalAlign.Center)
+          .padding({
+            left: this.breakpoint === Breakpoint.COMPACT ? 16 : 120,
+            right: 16,
+            bottom: this.breakpoint === Breakpoint.COMPACT ? 88 : 24
+          })
+          .hitTestBehavior(HitTestMode.Transparent)
         }
 
         // 沉浸光感悬浮胶囊导航
