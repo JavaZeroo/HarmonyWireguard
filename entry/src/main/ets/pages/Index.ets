@@ -21,6 +21,7 @@ import type { DiagnosticItem } from '../model/WgConfig';
 import { tunnelRuntimeService } from '../service/TunnelRuntimeService';
 import { TunnelDetailPanel } from '../components/tunnel/TunnelDetailPanel';
 import { ImportActions } from '../service/ImportActions';
+import { DialogHelper } from '../common/DialogHelper';
 
 const TAG = 'IndexPage';
 
@@ -600,10 +601,26 @@ struct Index {
           .color($r('app.color.divider'))
 
         if (this.selectedConfigId !== '') {
-          TunnelDetailPanel({ configId: this.selectedConfigId })
+          TunnelDetailPanel({
+            configId: this.selectedConfigId,
+            onEdit: () => {
+              this.editConfig(this.selectedConfigId);
+            },
+            onDelete: () => {
+              this.requestDeleteConfig(this.selectedConfigId);
+            }
+          })
             .layoutWeight(1)
         } else if (this.activeConfigId !== '') {
-          TunnelDetailPanel({ configId: this.activeConfigId })
+          TunnelDetailPanel({
+            configId: this.activeConfigId,
+            onEdit: () => {
+              this.editConfig(this.activeConfigId);
+            },
+            onDelete: () => {
+              this.requestDeleteConfig(this.activeConfigId);
+            }
+          })
             .layoutWeight(1)
         } else {
           Stack() {
@@ -726,6 +743,47 @@ struct Index {
     if (cfg) {
       this.openDetail(cfg.id);
     }
+  }
+
+  // 详情页「编辑」：手机端先收起 Cover（Cover 是覆盖层，不收起会盖住入栈的编辑页），再入编辑页。
+  private editConfig(id: string): void {
+    const cfg = configManager.getConfigById(id);
+    if (!cfg) {
+      return;
+    }
+    if (this.detailCoverShow) {
+      this.closeDetail();
+    }
+    this.pageStack.pushPath({ name: 'ConfigEdit', param: cfg });
+  }
+
+  // 详情页「删除」：二次确认后删除；若该配置正在连接/连接中先断开，再收起详情并刷新列表。
+  private requestDeleteConfig(id: string): void {
+    if (!id) {
+      return;
+    }
+    DialogHelper.showConfirm(this.getUIContext(), {
+      title: getString($r('app.string.dialog_delete_config_title')),
+      message: getString($r('app.string.dialog_delete_config_message')),
+      confirmText: getString($r('app.string.button_delete')),
+      secure: true,
+      onConfirm: () => {
+        if (this.activeConfigId === id) {
+          const cfg = configManager.getConfigById(id);
+          if (cfg) {
+            this.toggleVpn(cfg, false);
+          }
+        }
+        configManager.deleteConfig(id);
+        if (this.detailCoverShow) {
+          this.closeDetail();
+        }
+        if (this.selectedConfigId === id) {
+          this.selectedConfigId = '';
+        }
+        this.loadConfigs();
+      }
+    });
   }
 
   // 连接中可折叠 MiniBar：折叠=紧凑控制条（状态点+名称+断开）；
@@ -884,7 +942,15 @@ struct Index {
       .padding({ left: SPACING.md, right: SPACING.md })
       .backgroundColor($r('app.color.surface'))
 
-      TunnelDetailPanel({ configId: this.detailCoverId })
+      TunnelDetailPanel({
+        configId: this.detailCoverId,
+        onEdit: () => {
+          this.editConfig(this.detailCoverId);
+        },
+        onDelete: () => {
+          this.requestDeleteConfig(this.detailCoverId);
+        }
+      })
         .layoutWeight(1)
     }
     .width('100%')

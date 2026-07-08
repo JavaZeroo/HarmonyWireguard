@@ -22,6 +22,10 @@ export struct TunnelDetailPanel {
   @State logs: RuntimeLogEntry[] = [];
   @State isRunningDiagnostics: boolean = false;
 
+  // 详情页发起的编辑/删除（由宿主 Index 提供实现：导航到编辑页 / 二次确认后删除并刷新）
+  onEdit?: () => void;
+  onDelete?: () => void;
+
   private timer: number = -1;
 
   aboutToAppear(): void {
@@ -171,6 +175,34 @@ export struct TunnelDetailPanel {
             }
             .width('100%')
           }
+
+          // 编辑 / 删除该配置（详情页内唯一入口——坏配置就靠这里删）
+          Row({ space: SPACING.md }) {
+            Button(getString($r('app.string.button_edit')))
+              .layoutWeight(1)
+              .height(42)
+              .fontSize(TYPOGRAPHY.body_sm.size)
+              .fontColor($r('app.color.primary'))
+              .backgroundColor($r('app.color.primary_bg'))
+              .borderRadius(RADIUS.md)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.onEdit?.();
+              })
+
+            Button(getString($r('app.string.button_delete')))
+              .layoutWeight(1)
+              .height(42)
+              .fontSize(TYPOGRAPHY.body_sm.size)
+              .fontColor($r('app.color.danger'))
+              .backgroundColor($r('app.color.danger_bg'))
+              .borderRadius(RADIUS.md)
+              .hoverEffect(HoverEffect.Highlight)
+              .onClick(() => {
+                this.onDelete?.();
+              })
+          }
+          .width('100%')
 
           // Traffic
           if (this.runtime && (this.runtime.rxBytes > 0 || this.runtime.txBytes > 0)) {
