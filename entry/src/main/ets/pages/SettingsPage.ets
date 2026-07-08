@@ -68,27 +68,35 @@ export struct SettingsPage {
   // 主题分段选择器：跟随系统 / 浅色 / 深色
   @Builder
   ThemeSegment() {
-    Row() {
-      ForEach(this.themeOptions, (mode: ThemeMode) => {
-        Text(this.themeLabel(mode))
-          .fontSize(TYPOGRAPHY.body_sm.size)
-          .fontWeight(this.currentTheme === mode ? FontWeight.Medium : FontWeight.Regular)
-          .fontColor(this.currentTheme === mode ? $r('app.color.primary') : $r('app.color.text_secondary'))
-          .textAlign(TextAlign.Center)
-          .layoutWeight(1)
-          .height(36)
-          .borderRadius(RADIUS.sm)
-          .backgroundColor(this.currentTheme === mode ? $r('app.color.surface') : Color.Transparent)
-          .shadow(this.currentTheme === mode
-            ? { radius: 4, color: 'rgba(0,0,0,0.08)', offsetX: 0, offsetY: 1 }
-            : { radius: 0, color: 'rgba(0,0,0,0)', offsetX: 0, offsetY: 0 })
-          .onClick(() => {
-            this.getUIContext().animateTo({ duration: 200, curve: Curve.EaseOut }, () => {
-              this.currentTheme = mode;
-            });
-            settingsService.setTheme(mode);
-          })
-      }, (mode: ThemeMode) => mode)
+    Stack({ alignContent: Alignment.Start }) {
+      // 滑动指示胶囊：宽 1/3，按选中项索引平移（各段等宽，translate 用自身宽度百分比）。
+      // 平移由 onClick 的 animateTo 驱动，选中项在三段间“滑动”而非跳变。
+      Row()
+        .width('33.33%')
+        .height(36)
+        .backgroundColor($r('app.color.surface'))
+        .borderRadius(RADIUS.sm)
+        .shadow({ radius: 4, color: 'rgba(0,0,0,0.08)', offsetX: 0, offsetY: 1 })
+        .translate({ x: (this.themeOptions.indexOf(this.currentTheme) * 100).toString() + '%' })
+
+      Row() {
+        ForEach(this.themeOptions, (mode: ThemeMode) => {
+          Text(this.themeLabel(mode))
+            .fontSize(TYPOGRAPHY.body_sm.size)
+            .fontWeight(this.currentTheme === mode ? FontWeight.Medium : FontWeight.Regular)
+            .fontColor(this.currentTheme === mode ? $r('app.color.primary') : $r('app.color.text_secondary'))
+            .textAlign(TextAlign.Center)
+            .layoutWeight(1)
+            .height(36)
+            .onClick(() => {
+              this.getUIContext().animateTo({ duration: 250, curve: Curve.FastOutSlowIn }, () => {
+                this.currentTheme = mode;
+              });
+              settingsService.setTheme(mode);
+            })
+        }, (mode: ThemeMode) => mode)
+      }
+      .width('100%')
     }
     .width('100%')
     .height(44)

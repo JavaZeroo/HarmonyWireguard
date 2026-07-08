@@ -142,6 +142,8 @@ export struct ConnectionHeroCard {
         .width(128)
         .height(128)
         .fill(this.getRingBgColor())
+        // 状态切换时底盘颜色渐变（断开灰→连接中蓝→已连接绿）
+        .animation({ duration: 350, curve: Curve.EaseInOut })
 
       if (this.status === 'connecting') {
         LoadingProgress()
@@ -160,6 +162,8 @@ export struct ConnectionHeroCard {
     .shadow(this.status === 'connected'
       ? { radius: 36, color: 'rgba(0,179,134,0.35)', offsetX: 0, offsetY: 0 }
       : { radius: 0, color: 'rgba(0,0,0,0)', offsetX: 0, offsetY: 0 })
+    // 辉光随状态渐显/渐隐（scale 由 onStatusChange 的显式 animateTo 单独驱动，互不影响）
+    .animation({ duration: 350, curve: Curve.EaseInOut })
     .scale({ x: this.emblemScale, y: this.emblemScale })
     .onClick(() => {
       this.onPrimaryAction?.();
@@ -176,6 +180,8 @@ export struct ConnectionHeroCard {
         .fontSize(TYPOGRAPHY.title_md.size)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.getStatusTextColor())
+        // 状态文字颜色随状态渐变
+        .animation({ duration: 350, curve: Curve.EaseInOut })
         .margin({ top: SPACING.md })
 
       // 隧道名 · 握手时间
