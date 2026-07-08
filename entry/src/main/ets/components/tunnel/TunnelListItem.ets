@@ -143,14 +143,14 @@ export struct TunnelListItem {
       offsetX: SHADOW.sm.offsetX,
       offsetY: SHADOW.sm.offsetY
     })
-    .hoverEffect(HoverEffect.Scale)
+    // 悬停用系统高亮反馈（不改布局），避免放大导致卡片被两侧裁切
+    .hoverEffect(HoverEffect.Highlight)
     .onClick(() => {
       this.onSelect?.();
     })
     .stateStyles({
       pressed: {
-        .scale({ x: 0.98, y: 0.98 })
-        .opacity(0.92)
+        .opacity(0.9)
       }
     })
   }

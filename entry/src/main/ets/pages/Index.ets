@@ -517,7 +517,7 @@ struct Index {
     .shadow({ radius: 8, color: 'rgba(0,0,0,0.20)', offsetY: 4 })
     // 上抬避开底部悬浮 Dock（Tab 胶囊 / 连接中 MiniBar，展开时更高）
     .margin({ right: SPACING.md, bottom: this.breakpoint === Breakpoint.COMPACT ? (this.activeConfigId !== '' ? (this.miniExpanded ? 264 : 160) : 72) : SPACING.lg })
-    .hoverEffect(HoverEffect.Scale)
+    .hoverEffect(HoverEffect.Highlight)
     .bindMenu(this.importMenuItems())
   }
 

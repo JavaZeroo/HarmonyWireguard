@@ -161,7 +161,6 @@ export struct ConnectionHeroCard {
       ? { radius: 36, color: 'rgba(0,179,134,0.35)', offsetX: 0, offsetY: 0 }
       : { radius: 0, color: 'rgba(0,0,0,0)', offsetX: 0, offsetY: 0 })
     .scale({ x: this.emblemScale, y: this.emblemScale })
-    .hoverEffect(HoverEffect.Scale)
     .onClick(() => {
       this.onPrimaryAction?.();
     })
