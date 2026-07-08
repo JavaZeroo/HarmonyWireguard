@@ -829,6 +829,8 @@ struct Index {
         }
         .width('100%')
         .padding({ top: SPACING.xs, bottom: SPACING.sm })
+        // 展开态内容随折叠 animateTo 淡入/下滑，而非生硬弹出
+        .transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: -8 })))
       }
     }
     .width('100%')

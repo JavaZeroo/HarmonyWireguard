@@ -72,11 +72,15 @@ export struct TunnelListItem {
         SymbolGlyph($r('sys.symbol.wifi'))
           .fontSize(22)
           .fontColor([this.getIconColor()])
+          // 状态色切换时图标颜色渐变
+          .animation({ duration: 250, curve: Curve.EaseInOut })
       }
       .width(44)
       .height(44)
       .backgroundColor(this.getIconBgColor())
       .borderRadius(RADIUS.md)
+      // 状态色切换时图标底色渐变
+      .animation({ duration: 250, curve: Curve.EaseInOut })
 
       Column() {
         Row() {
@@ -139,6 +143,8 @@ export struct TunnelListItem {
     .border(this.isLive()
       ? { width: 1, color: this.getIconColor() }
       : { width: 1, color: Color.Transparent })
+    // 连接态描边颜色渐显/渐隐，而非突变
+    .animation({ duration: 250, curve: Curve.EaseInOut })
     .shadow({
       radius: SHADOW.sm.radius,
       color: SHADOW.sm.color,
