@@ -74,6 +74,9 @@ struct Index {
   @State windowWidth: number = 360;
   @State currentTabIndex: number = 0;
   @State miniExpanded: boolean = false;
+  // 手机端隧道详情：改用 bindContentCover 全屏展开（一镜到底），不走 Navigation push
+  @State detailCoverShow: boolean = false;
+  @State detailCoverId: string = '';
 
   private unsubscribe?: () => void;
   private statusSubscriber: commonEventManager.CommonEventSubscriber | null = null;
@@ -454,12 +457,9 @@ struct Index {
               config: config,
               status: config.id === this.activeConfigId ? this.activeStatus : 'disconnected',
               selected: config.id === this.selectedConfigId || config.id === this.activeConfigId,
+              sharedTag: this.breakpoint === Breakpoint.COMPACT ? ('detail_' + config.id) : '',
               onSelect: () => {
-                if (this.breakpoint === Breakpoint.COMPACT) {
-                  this.pageStack.pushPath({ name: 'TunnelDetail', param: config.id });
-                } else {
-                  this.selectedConfigId = config.id;
-                }
+                this.openDetail(config.id);
               },
               onConnect: () => {
                 this.toggleVpn(config, true);
@@ -686,15 +686,28 @@ struct Index {
     .margin({ left: 16 })
   }
 
+  // 打开某隧道详情：手机端一镜到底展开全屏 Cover；平板/2in1 右栏内联。
+  private openDetail(id: string): void {
+    if (this.breakpoint === Breakpoint.COMPACT) {
+      this.detailCoverId = id;
+      this.getUIContext().animateTo({ duration: 350, curve: Curve.Friction }, () => {
+        this.detailCoverShow = true;
+      });
+    } else {
+      this.selectedConfigId = id;
+    }
+  }
+
+  private closeDetail(): void {
+    this.getUIContext().animateTo({ duration: 300, curve: Curve.Friction }, () => {
+      this.detailCoverShow = false;
+    });
+  }
+
   private openActiveDetail(): void {
     const cfg = this.getActiveConfig();
-    if (!cfg) {
-      return;
-    }
-    if (this.breakpoint === Breakpoint.COMPACT) {
-      this.pageStack.pushPath({ name: 'TunnelDetail', param: cfg.id });
-    } else {
-      this.selectedConfigId = cfg.id;
+    if (cfg) {
+      this.openDetail(cfg.id);
     }
   }
 
@@ -825,6 +838,42 @@ struct Index {
     .margin({ bottom: 24 })
   }
 
+  // 手机端隧道详情 Cover：一镜到底——从列表卡片原地放大展开为全屏，关闭再收回。
+  @Builder
+  DetailCover() {
+    Column() {
+      Row() {
+        SymbolGlyph($r('sys.symbol.chevron_left'))
+          .fontSize(24)
+          .fontColor([$r('app.color.text_primary')])
+          .hoverEffect(HoverEffect.Highlight)
+          .onClick(() => {
+            this.closeDetail();
+          })
+
+        Text(getString($r('app.string.page_tunnel_detail')))
+          .fontSize(TYPOGRAPHY.title_sm.size)
+          .fontWeight(TYPOGRAPHY.title_sm.weight)
+          .fontColor($r('app.color.text_primary'))
+          .layoutWeight(1)
+          .textAlign(TextAlign.Center)
+
+        Blank().width(24)
+      }
+      .width('100%')
+      .height(56)
+      .padding({ left: SPACING.md, right: SPACING.md })
+      .backgroundColor($r('app.color.surface'))
+
+      TunnelDetailPanel({ configId: this.detailCoverId })
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor($r('app.color.background'))
+    .geometryTransition('detail_' + this.detailCoverId)
+  }
+
   build() {
     Navigation(this.pageStack) {
       Stack({ alignContent: this.breakpoint === Breakpoint.COMPACT ? Alignment.Bottom : Alignment.Start }) {
@@ -882,5 +931,8 @@ struct Index {
     .mode(NavigationMode.Stack)
     .hideTitleBar(true)
     .navDestination(PageMap)
+    // 一镜到底：手机端隧道详情走全屏 Cover（不经 NavPathStack，不会卡返回），
+    // 由 openDetail/closeDetail 的 animateTo 驱动 geometryTransition 形变。
+    .bindContentCover($$this.detailCoverShow, this.DetailCover(), { modalTransition: ModalTransition.NONE })
   }
 }

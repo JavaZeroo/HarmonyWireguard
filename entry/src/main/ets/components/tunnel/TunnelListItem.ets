@@ -9,6 +9,8 @@ export struct TunnelListItem {
   @Prop config: WgConfig;
   @Prop status: TunnelStatusType = 'disconnected';
   @Prop selected: boolean = false;
+  // 一镜到底共享元素 id（手机端点开详情时非空；平板分栏为空）
+  @Prop sharedTag: string = '';
 
   onSelect?: () => void;
   onConnect?: () => void;
@@ -153,5 +155,7 @@ export struct TunnelListItem {
         .opacity(0.9)
       }
     })
+    // 一镜到底：点开详情时整卡片原地放大展开为全屏详情
+    .geometryTransition(this.sharedTag)
   }
 }
