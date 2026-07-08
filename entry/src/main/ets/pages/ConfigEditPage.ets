@@ -434,5 +434,8 @@ export struct ConfigEditPage {
     .width('100%')
     .height('100%')
     .backgroundColor($r('app.color.background'))
+    // 页面间转场：入栈自右侧滑入 + 淡入，出栈反向，取代默认纯淡入淡出
+    .transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ x: 40 }))
+      .animation({ duration: 300, curve: Curve.Friction }))
   }
 }

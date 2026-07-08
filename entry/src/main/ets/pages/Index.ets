@@ -77,6 +77,8 @@ struct Index {
   // 手机端隧道详情：改用 bindContentCover 全屏展开（一镜到底），不走 Navigation push
   @State detailCoverShow: boolean = false;
   @State detailCoverId: string = '';
+  // FAB 添加菜单是否展开：驱动 “+” 旋转成 “×”
+  @State fabMenuOpen: boolean = false;
 
   private unsubscribe?: () => void;
   private statusSubscriber: commonEventManager.CommonEventSubscriber | null = null;
@@ -452,22 +454,27 @@ struct Index {
         }
 
         ForEach(this.configs, (config: WgConfig) => {
-          ListItem() {
-            TunnelListItem({
-              config: config,
-              status: config.id === this.activeConfigId ? this.activeStatus : 'disconnected',
-              selected: config.id === this.selectedConfigId || config.id === this.activeConfigId,
-              sharedTag: this.breakpoint === Breakpoint.COMPACT ? ('detail_' + config.id) : '',
-              onSelect: () => {
-                this.openDetail(config.id);
-              },
-              onConnect: () => {
-                this.toggleVpn(config, true);
-              },
-              onDisconnect: () => {
-                this.toggleVpn(config, false);
-              }
-            })
+          // 一镜到底：详情 Cover 展开时把源卡片从列表移除，使其作为共享元素
+          // “消失端”与 Cover“出现端”配对形变；关闭时源卡重新出现，Cover 收回到卡片。
+          // 列表此时被全屏 Cover 遮住，移除引起的回流不可见。
+          if (!(this.detailCoverShow && this.detailCoverId === config.id)) {
+            ListItem() {
+              TunnelListItem({
+                config: config,
+                status: config.id === this.activeConfigId ? this.activeStatus : 'disconnected',
+                selected: config.id === this.selectedConfigId || config.id === this.activeConfigId,
+                sharedTag: this.breakpoint === Breakpoint.COMPACT ? ('detail_' + config.id) : '',
+                onSelect: () => {
+                  this.openDetail(config.id);
+                },
+                onConnect: () => {
+                  this.toggleVpn(config, true);
+                },
+                onDisconnect: () => {
+                  this.toggleVpn(config, false);
+                }
+              })
+            }
           }
         }, (config: WgConfig) => config.id)
 
@@ -509,6 +516,9 @@ struct Index {
       Text('+')
         .fontSize(24)
         .fontColor('#FFFFFF')
+        // 菜单展开时 “+” 旋转 45° 成 “×”，收起还原
+        .rotate({ angle: this.fabMenuOpen ? 45 : 0 })
+        .animation({ duration: 200, curve: Curve.FastOutSlowIn })
     }
     .width(56)
     .height(56)
@@ -518,7 +528,14 @@ struct Index {
     // 上抬避开底部悬浮 Dock（Tab 胶囊 / 连接中 MiniBar，展开时更高）
     .margin({ right: SPACING.md, bottom: this.breakpoint === Breakpoint.COMPACT ? (this.activeConfigId !== '' ? (this.miniExpanded ? 264 : 160) : 72) : SPACING.lg })
     .hoverEffect(HoverEffect.Highlight)
-    .bindMenu(this.importMenuItems())
+    .bindMenu(this.importMenuItems(), {
+      onAppear: () => {
+        this.fabMenuOpen = true;
+      },
+      onDisappear: () => {
+        this.fabMenuOpen = false;
+      }
+    })
   }
 
   // 手机整屏：内容从光感玻璃标题栏下穿过，FAB 悬浮右下。
@@ -877,20 +894,41 @@ struct Index {
   build() {
     Navigation(this.pageStack) {
       Stack({ alignContent: this.breakpoint === Breakpoint.COMPACT ? Alignment.Bottom : Alignment.Start }) {
-        // 主体内容（按当前 Tab 切换，二级页仍由 NavPathStack 全屏 push）
+        // 主体内容（按当前 Tab 切换）。Tab 切换用交叉淡入 + 轻微上移的转场，
+        // 由胶囊点击里的 animateTo 驱动 .transition()，不再生硬闪切。
         if (this.breakpoint === Breakpoint.COMPACT) {
           if (this.currentTabIndex === 0) {
-            this.CompactLayout()
+            Column() {
+              this.CompactLayout()
+            }
+            .width('100%')
+            .height('100%')
+            .transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 16 })))
           } else {
-            SettingsPage({ embedded: true })
+            Column() {
+              SettingsPage({ embedded: true })
+            }
+            .width('100%')
+            .height('100%')
+            .transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 16 })))
           }
         } else {
           // 平板/2in1：左侧留位给悬浮胶囊
           Column() {
             if (this.currentTabIndex === 0) {
-              this.SplitLayout(this.breakpoint === Breakpoint.MEDIUM ? 320 : 360)
+              Column() {
+                this.SplitLayout(this.breakpoint === Breakpoint.MEDIUM ? 320 : 360)
+              }
+              .width('100%')
+              .height('100%')
+              .transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 16 })))
             } else {
-              SettingsPage({ embedded: true })
+              Column() {
+                SettingsPage({ embedded: true })
+              }
+              .width('100%')
+              .height('100%')
+              .transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 16 })))
             }
           }
           .width('100%')
