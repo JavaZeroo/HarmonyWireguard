@@ -576,6 +576,14 @@ struct Index {
     .backgroundColor($r('app.color.background'))
   }
 
+  // 主栏宽度随断点/窗口放大（占比思想）：折叠屏窄一档，超大屏（≥1440vp）更宽。
+  private masterWidth(): number {
+    if (this.breakpoint === Breakpoint.MEDIUM) {
+      return 320;
+    }
+    return this.windowWidth >= 1440 ? 400 : 360;
+  }
+
   // 平板 / 折叠屏 / 2in1：顶部全宽光感标题栏 + 下方左“主”栏右详情。
   // 全宽标题栏解决全屏时标题被挤在窄列里的问题；未手动选中时回退到当前连接的隧道。
   @Builder
@@ -603,6 +611,7 @@ struct Index {
         if (this.selectedConfigId !== '') {
           TunnelDetailPanel({
             configId: this.selectedConfigId,
+            contentMaxWidth: 720,
             onEdit: () => {
               this.editConfig(this.selectedConfigId);
             },
@@ -614,6 +623,7 @@ struct Index {
         } else if (this.activeConfigId !== '') {
           TunnelDetailPanel({
             configId: this.activeConfigId,
+            contentMaxWidth: 720,
             onEdit: () => {
               this.editConfig(this.activeConfigId);
             },
@@ -985,7 +995,7 @@ struct Index {
           Column() {
             if (this.currentTabIndex === 0) {
               Column() {
-                this.SplitLayout(this.breakpoint === Breakpoint.MEDIUM ? 320 : 360)
+                this.SplitLayout(this.masterWidth())
               }
               .width('100%')
               .height('100%')

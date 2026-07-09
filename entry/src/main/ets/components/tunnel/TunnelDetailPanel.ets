@@ -16,6 +16,8 @@ import { deriveRouteMode } from '../../common/Utils';
 @Component
 export struct TunnelDetailPanel {
   @Prop @Watch('onConfigIdChange') configId: string = '';
+  // 详情内容最大宽度（缩进布局）：宽屏分栏时限宽居中，0 = 不限（手机全屏 Cover）。
+  @Prop contentMaxWidth: number = 0;
   @State config: WgConfig | null = null;
   @State runtime: TunnelRuntimeState | null = null;
   @State diagnostics: DiagnosticItem[] = [];
@@ -131,6 +133,8 @@ export struct TunnelDetailPanel {
 
   build() {
     Scroll() {
+      // 外层居中容器：宽屏时把限宽后的内容在详情区居中（缩进布局）。
+      Column() {
       Column({ space: SPACING.md }) {
         if (!this.config) {
           Text(getString($r('app.string.error_config_not_found')))
@@ -333,7 +337,11 @@ export struct TunnelDetailPanel {
         }
       }
       .width('100%')
+      .constraintSize({ maxWidth: this.contentMaxWidth > 0 ? this.contentMaxWidth : 100000 })
       .padding({ left: SPACING.md, right: SPACING.md, top: SPACING.md, bottom: SPACING.xl })
+      }
+      .width('100%')
+      .alignItems(HorizontalAlign.Center)
     }
     .width('100%')
     .layoutWeight(1)
