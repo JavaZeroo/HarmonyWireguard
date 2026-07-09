@@ -354,12 +354,12 @@ struct Index {
 
   // 手机端内容从钉住的玻璃标题栏下穿过 → 顶部留白；平板/2in1 标题栏在上方不重叠。
   private topContentClearance(): number {
-    return this.breakpoint === Breakpoint.COMPACT ? 44 : SPACING.xs;
+    return this.isCompactUX() ? 44 : SPACING.xs;
   }
 
   // 底部留白避开悬浮 Dock（Tab 胶囊 / 连接中 MiniBar，展开时更高）。
   private bottomContentClearance(): number {
-    if (this.breakpoint !== Breakpoint.COMPACT) {
+    if (!this.isCompactUX()) {
       return SPACING.lg;
     }
     if (this.activeConfigId === '') {
@@ -431,7 +431,7 @@ struct Index {
       .width('100%')
       .height('100%')
       .justifyContent(FlexAlign.Center)
-      .padding({ left: SPACING.lg, right: SPACING.lg, top: this.breakpoint === Breakpoint.COMPACT ? 52 : 0 })
+      .padding({ left: SPACING.lg, right: SPACING.lg, top: this.isCompactUX() ? 52 : 0 })
     } else {
       List({ space: SPACING.md }) {
         ListItem() {
@@ -464,7 +464,7 @@ struct Index {
                 config: config,
                 status: config.id === this.activeConfigId ? this.activeStatus : 'disconnected',
                 selected: config.id === this.selectedConfigId || config.id === this.activeConfigId,
-                sharedTag: this.breakpoint === Breakpoint.COMPACT ? ('detail_' + config.id) : '',
+                sharedTag: this.isCompactUX() ? ('detail_' + config.id) : '',
                 onSelect: () => {
                   this.openDetail(config.id);
                 },
@@ -527,7 +527,7 @@ struct Index {
     .borderRadius(28)
     .shadow({ radius: 8, color: 'rgba(0,0,0,0.20)', offsetY: 4 })
     // 上抬避开底部悬浮 Dock（Tab 胶囊 / 连接中 MiniBar，展开时更高）
-    .margin({ right: SPACING.md, bottom: this.breakpoint === Breakpoint.COMPACT ? (this.activeConfigId !== '' ? (this.miniExpanded ? 264 : 160) : 72) : SPACING.lg })
+    .margin({ right: SPACING.md, bottom: this.isCompactUX() ? (this.activeConfigId !== '' ? (this.miniExpanded ? 264 : 160) : 72) : SPACING.lg })
     .hoverEffect(HoverEffect.Highlight)
     .bindMenu(this.importMenuItems(), {
       onAppear: () => {
@@ -576,11 +576,14 @@ struct Index {
     .backgroundColor($r('app.color.background'))
   }
 
-  // 主栏宽度随断点/窗口放大（占比思想）：折叠屏窄一档，超大屏（≥1440vp）更宽。
+  // 单栏 UX：< lg(840vp) 一律单栏 + 全屏详情 Cover + 底部悬浮导航；仅 lg(≥840) 才左右分栏。
+  // 这样手机横屏 / 平板竖屏（md 600–840）不会出现两栏都局促的分栏，符合“lg 才双栏”的通行阈值。
+  private isCompactUX(): boolean {
+    return this.breakpoint !== Breakpoint.EXPANDED;
+  }
+
+  // 分栏主栏宽度（仅 lg 调用）：超大屏（≥1440vp）更宽（占比思想）。
   private masterWidth(): number {
-    if (this.breakpoint === Breakpoint.MEDIUM) {
-      return 320;
-    }
     return this.windowWidth >= 1440 ? 400 : 360;
   }
 
@@ -732,7 +735,7 @@ struct Index {
 
   // 打开某隧道详情：手机端一镜到底展开全屏 Cover；平板/2in1 右栏内联。
   private openDetail(id: string): void {
-    if (this.breakpoint === Breakpoint.COMPACT) {
+    if (this.isCompactUX()) {
       this.detailCoverId = id;
       this.getUIContext().animateTo({ duration: 350, curve: Curve.Friction }, () => {
         this.detailCoverShow = true;
@@ -971,10 +974,10 @@ struct Index {
 
   build() {
     Navigation(this.pageStack) {
-      Stack({ alignContent: this.breakpoint === Breakpoint.COMPACT ? Alignment.Bottom : Alignment.Start }) {
+      Stack({ alignContent: this.isCompactUX() ? Alignment.Bottom : Alignment.Start }) {
         // 主体内容（按当前 Tab 切换）。Tab 切换用交叉淡入 + 轻微上移的转场，
         // 由胶囊点击里的 animateTo 驱动 .transition()，不再生硬闪切。
-        if (this.breakpoint === Breakpoint.COMPACT) {
+        if (this.isCompactUX()) {
           if (this.currentTabIndex === 0) {
             Column() {
               this.CompactLayout()
@@ -1014,8 +1017,8 @@ struct Index {
           .padding({ left: 104 })
         }
 
-        // 底部导航：手机端 = MiniBar + Tab 胶囊组合悬浮单元（居中底部）
-        if (this.breakpoint === Breakpoint.COMPACT) {
+        // 底部导航：单栏 UX = MiniBar + Tab 胶囊组合悬浮单元（居中底部）
+        if (this.isCompactUX()) {
           this.BottomDock()
         } else {
           // 平板/2in1：左侧纵向胶囊 Tab 栏
