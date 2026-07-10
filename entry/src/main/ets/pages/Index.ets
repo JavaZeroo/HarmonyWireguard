@@ -417,7 +417,7 @@ struct Index {
   // 隧道页内容：HarmonyOS 惯用 List（统一 8vp 栅格间距 + 页边距），
   // 依次为当前连接 Hero、快速诊断、配置分组标题、配置卡片列表。
   @Builder
-  ConfigListContent() {
+  ConfigListContent(containerWidth: number) {
     if (this.configs.length === 0) {
       Column() {
         EmptyState({
@@ -487,7 +487,7 @@ struct Index {
       .height('100%')
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
-      .padding({ left: SPACING.md, right: SPACING.md })
+      .padding({ left: this.listSidePadding(containerWidth), right: this.listSidePadding(containerWidth) })
     }
   }
 
@@ -544,7 +544,7 @@ struct Index {
   CompactLayout() {
     Stack({ alignContent: Alignment.BottomEnd }) {
       // List 自带滚动，内容从玻璃标题栏下穿过（顶部留白由 topContentClearance 处理）
-      this.ConfigListContent()
+      this.ConfigListContent(this.windowWidth)
 
       if (this.configs.length > 0) {
         this.Fab()
@@ -587,6 +587,16 @@ struct Index {
     return this.windowWidth >= 1440 ? 400 : 360;
   }
 
+  // 单栏内容限宽居中（缩进布局）：容器够宽时用左右内边距把列表夹到 ~640 居中，
+  // 避免 md(600–840) 单栏时卡片被拉得过宽；窄容器（如分栏主栏 360）退回常规页边距。
+  private listSidePadding(containerWidth: number): number {
+    const maxContent = 640;
+    if (containerWidth > maxContent + 2 * SPACING.lg) {
+      return (containerWidth - maxContent) / 2;
+    }
+    return SPACING.md;
+  }
+
   // 平板 / 折叠屏 / 2in1：顶部全宽光感标题栏 + 下方左“主”栏右详情。
   // 全宽标题栏解决全屏时标题被挤在窄列里的问题；未手动选中时回退到当前连接的隧道。
   @Builder
@@ -596,7 +606,7 @@ struct Index {
 
       Row() {
         Stack({ alignContent: Alignment.BottomEnd }) {
-          this.ConfigListContent()
+          this.ConfigListContent(masterWidth)
 
           if (this.configs.length > 0) {
             this.Fab()
