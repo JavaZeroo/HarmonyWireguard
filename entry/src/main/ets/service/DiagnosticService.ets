@@ -8,7 +8,7 @@ import type { DiagnosticItem, TunnelDiagnosticState, TunnelRuntimeState, WgConfi
   from '../model/WgConfig';
 
 const IPV4_PATTERN = /^\d+\.\d+\.\d+\.\d+$/;
-const HANDSHAKE_FRESH_SECONDS = 180;
+export const HANDSHAKE_FRESH_SECONDS = 180;
 
 export class DiagnosticService {
   static evaluateLocal(config: WgConfig, runtime: TunnelRuntimeState | null): DiagnosticItem[] {

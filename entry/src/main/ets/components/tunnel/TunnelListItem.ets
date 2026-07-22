@@ -1,12 +1,16 @@
 import { SPACING, RADIUS, TYPOGRAPHY, SHADOW, getString } from '../../common/DesignSystem';
 import { deriveRouteMode, formatEndpointShort } from '../../common/Utils';
-import type { WgConfig } from '../../model/WgConfig';
 import type { TunnelStatusType } from '../../model/WgConfig';
 import { StatusBadge } from '../common/StatusBadge';
 
 @Component
 export struct TunnelListItem {
-  @Prop config: WgConfig;
+  // Keep secrets out of a frequently rebuilt @Prop object. The row only needs
+  // these presentation fields from the full WireGuard configuration.
+  @Prop name: string = '';
+  @Prop endpoint: string = '';
+  @Prop allowedIPs: string = '';
+  @Prop persistentKeepalive: number = 0;
   @Prop status: TunnelStatusType = 'disconnected';
   @Prop selected: boolean = false;
   @Prop compact: boolean = false;
@@ -48,7 +52,7 @@ export struct TunnelListItem {
   }
 
   private getRouteLabel(): string {
-    const mode = deriveRouteMode(this.config.allowedIPs);
+    const mode = deriveRouteMode(this.allowedIPs);
     switch (mode) {
       case 'global':
         return getString($r('app.string.route_global'));
@@ -60,9 +64,9 @@ export struct TunnelListItem {
   }
 
   private getKeepaliveLabel(): string {
-    if (this.config.persistentKeepalive > 0) {
+    if (this.persistentKeepalive > 0) {
       return getString($r('app.string.label_keepalive_seconds'))
-        .replace('%d', String(this.config.persistentKeepalive));
+        .replace('%d', String(this.persistentKeepalive));
     }
     return '';
   }
@@ -82,7 +86,7 @@ export struct TunnelListItem {
 
   private getAccessibilityText(): string {
     return getString($r('app.string.accessibility_tunnel_summary'))
-      .replace('%1$s', this.config.name)
+      .replace('%1$s', this.name)
       .replace('%2$s', this.getStatusLabel())
       .replace('%3$s', this.getRouteLabel());
   }
@@ -91,7 +95,7 @@ export struct TunnelListItem {
     const resource = this.isLive()
       ? $r('app.string.accessibility_disconnect_tunnel')
       : $r('app.string.accessibility_connect_tunnel');
-    return getString(resource).replace('%s', this.config.name);
+    return getString(resource).replace('%s', this.name);
   }
 
   build() {
@@ -114,7 +118,7 @@ export struct TunnelListItem {
 
         Column() {
           Row() {
-            Text(this.config.name)
+            Text(this.name)
               .fontSize(TYPOGRAPHY.body_md.size)
               .fontWeight(FontWeight.Medium)
               .fontColor($r('app.color.text_primary'))
@@ -126,7 +130,7 @@ export struct TunnelListItem {
           }
           .width('100%')
 
-          Text(formatEndpointShort(this.config.endpoint))
+          Text(formatEndpointShort(this.endpoint))
             .fontSize(TYPOGRAPHY.caption.size)
             .fontColor($r('app.color.text_secondary'))
             .width('100%')

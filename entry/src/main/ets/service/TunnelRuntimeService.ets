@@ -121,7 +121,11 @@ class TunnelRuntimeService {
 
   private notifyListeners(): void {
     for (const cb of this.listeners) {
-      cb(this.states);
+      try {
+        // Do not expose the mutable repository Map or let one failing listener
+        // prevent the remaining subscribers from receiving an update.
+        cb(new Map(this.states));
+      } catch (err) {}
     }
   }
 }

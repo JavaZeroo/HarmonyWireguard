@@ -20,9 +20,9 @@ export interface DefaultConfig {
 
 export const APP_CONSTANTS: AppConstants = {
   DOMAIN: 0xA001,
-  BUNDLE_NAME: 'com.example.harmonywireguard',
+  BUNDLE_NAME: 'com.javazeroo.harmonywireguard',
   VPN_ABILITY_NAME: 'WireGuardVpnAbility',
-  VPN_STATUS_EVENT: 'com.example.harmonywireguard.VPN_STATUS',
+  VPN_STATUS_EVENT: 'com.javazeroo.harmonywireguard.VPN_STATUS',
   APP_BACKGROUND_EVENT: 'appBackground'
 };
 

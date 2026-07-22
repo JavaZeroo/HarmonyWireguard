@@ -12,8 +12,12 @@
 #define LOG_DOMAIN 0xA001
 #define LOG_TAG "UdpSocket"
 
-#define UDP_LOGI(fmt, ...) OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, "[%{public}s %{public}d] " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__)
-#define UDP_LOGE(fmt, ...) OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, "[%{public}s %{public}d] " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define UDP_LOGI(fmt, ...) \
+    OH_LOG_Print(LOG_APP, LOG_INFO, LOG_DOMAIN, LOG_TAG, \
+                 "[%{public}s %{public}d] " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__)
+#define UDP_LOGE(fmt, ...) \
+    OH_LOG_Print(LOG_APP, LOG_ERROR, LOG_DOMAIN, LOG_TAG, \
+                 "[%{public}s %{public}d] " fmt, __FUNCTION__, __LINE__, ##__VA_ARGS__)
 
 int32_t CreateUdpSocket(const std::string& ip, uint16_t port) {
     int32_t fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -38,7 +42,7 @@ int32_t CreateUdpSocket(const std::string& ip, uint16_t port) {
         return -1;
     }
 
-    UDP_LOGI("UDP socket created, fd=%{public}d, endpoint=%{public}s:%{public}d", fd, ip.c_str(), port);
+    UDP_LOGI("UDP socket created, fd=%{public}d, endpoint port=%{public}d", fd, port);
     return fd;
 }
 

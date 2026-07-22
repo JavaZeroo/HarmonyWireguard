@@ -1,5 +1,12 @@
 import { describe, it, expect } from '@ohos/hypium';
-import { parseEndpoint, deriveRouteMode, parseWireGuardConfig, shouldApplyToggle, ToggleContext }
+import {
+  parseEndpoint,
+  deriveRouteMode,
+  parseWireGuardConfig,
+  resolvePersistentKeepalive,
+  shouldApplyToggle,
+  ToggleContext
+}
   from '../../../main/ets/common/Utils';
 import { ConfigParser } from '../../../main/ets/service/ConfigParser';
 
@@ -105,6 +112,14 @@ export default function configTest() {
     it('configParser_invalidKeepaliveFails', 0, () => {
       const invalidKeepalive = VALID_CONFIG.replace('PersistentKeepalive = 25', 'PersistentKeepalive = 70000');
       expect(ConfigParser.parseFromText(invalidKeepalive).success).assertFalse();
+    });
+
+    it('keepalive_explicitZeroRemainsDisabled', 0, () => {
+      expect(resolvePersistentKeepalive(0)).assertEqual(0);
+    });
+
+    it('keepalive_missingLegacyValueUsesDefault', 0, () => {
+      expect(resolvePersistentKeepalive(undefined)).assertEqual(25);
     });
 
     it('configParser_invalidAddressFails', 0, () => {

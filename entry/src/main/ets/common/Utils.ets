@@ -21,6 +21,12 @@ export interface ParsedWireGuardConfig {
   persistentKeepalive: number;
 }
 
+// A missing field in a legacy stored configuration keeps the historical
+// default, while an explicit 0 must remain "disabled".
+export function resolvePersistentKeepalive(value: number | undefined): number {
+  return value === undefined ? 25 : value;
+}
+
 export function parseEndpoint(endpoint: string): ParsedEndpoint | null {
   if (!endpoint) return null;
 

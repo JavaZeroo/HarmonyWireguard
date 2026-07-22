@@ -1,6 +1,6 @@
 {
   "string": [
-    { "name": "product_name", "value": "WireGuard" },
+    { "name": "product_name", "value": "HarmonyWireguard" },
     { "name": "theme_system", "value": "System" },
     { "name": "theme_light", "value": "Light" },
     { "name": "theme_dark", "value": "Dark" },
@@ -262,8 +262,8 @@
     { "name": "diag_ipv6_not_requested", "value": "The configuration does not request IPv6 routes" },
 
     { "name": "open_source_desc", "value": "This app uses the following open-source projects:" },
-    { "name": "open_source_wireguard", "value": "- WireGuard (GPLv2)" },
-    { "name": "open_source_arkui", "value": "- HarmonyOS ArkUI" },
+    { "name": "open_source_wireguard", "value": "- wireguard-lwIP (BSD 3-Clause)" },
+    { "name": "open_source_arkui", "value": "- X25519 reference implementation (MIT)" },
     { "name": "privacy_desc", "value": "This app processes WireGuard configurations only on your device. Private keys and configurations are never uploaded and remain in local storage." },
     { "name": "developer_name", "value": "HarmonyWireguard Project" }
   ]

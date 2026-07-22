@@ -1,0 +1,28 @@
+name: Publish GitHub release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create technology preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          gh release create "$TAG_NAME" \
+            --repo "$GH_REPO" \
+            --verify-tag \
+            --title "HarmonyWireguard $TAG_NAME" \
+            --generate-notes \
+            --prerelease \
+            --notes "Technology preview: not independently audited; use only in controlled test environments."

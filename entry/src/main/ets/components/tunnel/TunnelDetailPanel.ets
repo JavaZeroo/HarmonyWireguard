@@ -7,7 +7,7 @@ import { RuntimeLogList } from '../diagnostics/RuntimeLogList';
 import { DiagnosticChecklist } from '../diagnostics/DiagnosticChecklist';
 import { ExportReportButton } from '../diagnostics/ExportReportButton';
 import { configManager } from '../../service/ConfigManager';
-import { DiagnosticService } from '../../service/DiagnosticService';
+import { DiagnosticService, HANDSHAKE_FRESH_SECONDS } from '../../service/DiagnosticService';
 import { logService } from '../../service/LogService';
 import { tunnelRuntimeService } from '../../service/TunnelRuntimeService';
 import type {
@@ -40,6 +40,7 @@ export struct TunnelDetailPanel {
   private unsubscribeRuntime?: () => void;
   private diagnosticRunId: number = 0;
   private isActive: boolean = false;
+  private lastRuntimeDiagnosticKey: string = '';
 
   aboutToAppear(): void {
     this.isActive = true;
@@ -48,13 +49,19 @@ export struct TunnelDetailPanel {
       if (!this.config) {
         return;
       }
-      const previousStatus = this.runtime?.status;
-      const hadHandshake = this.runtime?.lastHandshakeAt !== undefined;
+      const previousRuntime = this.runtime;
       const nextRuntime = states.get(this.config.id) ?? null;
+      const statusChanged = nextRuntime?.status !== previousRuntime?.status;
+      const nextDiagnosticKey = this.runtimeDiagnosticKey(nextRuntime);
+      const diagnosticsChanged = nextDiagnosticKey !== this.lastRuntimeDiagnosticKey;
       this.runtime = nextRuntime;
-      this.logs = logService.getLogs(this.config.id);
-      const hasHandshake = nextRuntime?.lastHandshakeAt !== undefined;
-      if (nextRuntime?.status !== previousStatus || hasHandshake !== hadHandshake) {
+      // Runtime heartbeats arrive every 1.5 s, while logs only change on a
+      // status transition. Avoid filtering/copying the entire log buffer on every beat.
+      if (statusChanged) {
+        this.logs = logService.getLogs(this.config.id, 20);
+      }
+      if (diagnosticsChanged) {
+        this.lastRuntimeDiagnosticKey = nextDiagnosticKey;
         this.runDiagnostics();
       }
     });
@@ -63,7 +70,6 @@ export struct TunnelDetailPanel {
   aboutToDisappear(): void {
     this.isActive = false;
     this.diagnosticRunId++;
-    this.isDiagnosing = false;
     if (this.unsubscribeRuntime !== undefined) {
       this.unsubscribeRuntime();
       this.unsubscribeRuntime = undefined;
@@ -73,6 +79,20 @@ export struct TunnelDetailPanel {
   private onConfigIdChange(): void {
     this.isAllowedIpsExpanded = false;
     this.loadConfig();
+  }
+
+  private runtimeDiagnosticKey(runtime: TunnelRuntimeState | null): string {
+    if (runtime === null) {
+      return 'disconnected';
+    }
+    if (runtime.status !== 'connected') {
+      return runtime.status;
+    }
+    if (runtime.lastHandshakeAt === undefined) {
+      return 'connected-waiting';
+    }
+    const ageSeconds = Math.max(0, Math.floor(Date.now() / 1000) - runtime.lastHandshakeAt);
+    return ageSeconds > HANDSHAKE_FRESH_SECONDS ? 'connected-stale' : 'connected-fresh';
   }
 
   private showToast(message: string): void {
@@ -98,7 +118,10 @@ export struct TunnelDetailPanel {
   private loadConfig(): void {
     if (!this.configId) {
       this.config = null;
+      this.runtime = null;
+      this.logs = [];
       this.diagnostics = [];
+      this.lastRuntimeDiagnosticKey = '';
       this.diagnosticRunId++;
       return;
     }
@@ -106,11 +129,15 @@ export struct TunnelDetailPanel {
     if (cfg) {
       this.config = cfg;
       this.runtime = tunnelRuntimeService.getState(cfg.id) || null;
-      this.logs = logService.getLogs(cfg.id);
+      this.logs = logService.getLogs(cfg.id, 20);
+      this.lastRuntimeDiagnosticKey = this.runtimeDiagnosticKey(this.runtime);
       this.runDiagnostics();
     } else {
       this.config = null;
+      this.runtime = null;
+      this.logs = [];
       this.diagnostics = [];
+      this.lastRuntimeDiagnosticKey = '';
       this.diagnosticRunId++;
     }
   }

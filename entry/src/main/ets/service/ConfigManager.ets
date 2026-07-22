@@ -1,6 +1,7 @@
 import { preferences } from '@kit.ArkData';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import type { WgConfig } from '../model/WgConfig';
+import { resolvePersistentKeepalive } from '../common/Utils';
 
 const TAG = 'ConfigManager';
 const PREF_NAME = 'wg_configs';
@@ -31,7 +32,13 @@ class ConfigManager {
     try {
       const str = this.pref.getSync(KEY_CONFIGS, '[]') as string;
       const configs = JSON.parse(str) as WgConfig[];
-      return Array.isArray(configs) ? configs : [];
+      if (!Array.isArray(configs)) {
+        return [];
+      }
+      for (const config of configs) {
+        config.persistentKeepalive = resolvePersistentKeepalive(config.persistentKeepalive);
+      }
+      return configs;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       hilog.error(DOMAIN, TAG, 'Failed to parse configs: %{public}s', msg);

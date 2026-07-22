@@ -6,7 +6,7 @@
     { "name": "theme_system", "value": "跟随系统" },
     { "name": "theme_light", "value": "浅色" },
     { "name": "theme_dark", "value": "深色" },
-    { "name": "product_name", "value": "WireGuard" },
+    { "name": "product_name", "value": "HarmonyWireguard" },
     { "name": "app_version", "value": "Version 1.0.0" },
 
     { "name": "tab_tunnels", "value": "隧道" },
@@ -259,8 +259,8 @@
     { "name": "diag_ipv6_not_requested", "value": "配置未请求 IPv6 路由" },
 
     { "name": "open_source_desc", "value": "本应用使用了以下开源项目：" },
-    { "name": "open_source_wireguard", "value": "- WireGuard (GPLv2)" },
-    { "name": "open_source_arkui", "value": "- HarmonyOS ArkUI" },
+    { "name": "open_source_wireguard", "value": "- wireguard-lwIP (BSD 3-Clause)" },
+    { "name": "open_source_arkui", "value": "- X25519 reference implementation (MIT)" },
     { "name": "privacy_desc", "value": "本应用仅在本地处理 WireGuard 配置信息，不会将您的私钥或配置上传到任何服务器。所有敏感数据均存储在设备本地。" },
     { "name": "developer_name", "value": "HarmonyWireguard Project" }
   ]

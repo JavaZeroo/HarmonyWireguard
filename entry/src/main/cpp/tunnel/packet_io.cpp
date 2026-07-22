@@ -168,10 +168,6 @@ static void TunToUdpThread() {
                     g_txBytes.fetch_add((uint64_t)s, std::memory_order_relaxed);
                     sent = true;
                     count++;
-                    if (count <= 3) {
-                        WG_LOGI("DATA sent #%{public}lu: plain=%{public}zd enc=%{public}zu udp_sent=%{public}zd",
-                                (unsigned long)count, plainLen, encLen, s);
-                    }
                 }
                 break;
             }
@@ -231,10 +227,7 @@ static void UdpToTunThread() {
         }
         g_rxBytes.fetch_add((uint64_t)encLen, std::memory_order_relaxed);
 
-        // 收到任何 UDP 包都打日志 —— 用于判断"包到底有没有从服务器回来"
         uint8_t msgType = encBuf[0];
-        WG_LOGI("UDP RECV: %{public}zd bytes, msgType=%{public}u (1=init 2=resp 3=cookie 4=data)",
-                encLen, (unsigned)msgType);
 
         struct wireguard_peer *peer = nullptr;
         int result = wg_process_packet(encBuf, (size_t)encLen, plainBuf, BUFFER_SIZE, &peer);

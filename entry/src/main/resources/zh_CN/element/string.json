@@ -1,6 +1,6 @@
 {
   "string": [
-    { "name": "product_name", "value": "WireGuard" },
+    { "name": "product_name", "value": "HarmonyWireguard" },
 
     { "name": "tab_tunnels", "value": "隧道" },
     { "name": "page_home", "value": "WireGuard" },

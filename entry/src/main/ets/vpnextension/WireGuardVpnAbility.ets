@@ -4,8 +4,9 @@ import { wantAgent, Want } from '@kit.AbilityKit';
 import { commonEventManager, BusinessError } from '@kit.BasicServicesKit';
 import wgNative from 'libentry.so';
 import { APP_CONSTANTS } from '../common/Constants';
-import type { WgConfig } from '../model/WgConfig';
+import type { WgConfig, WgStatusPayload } from '../model/WgConfig';
 import { buildVpnConfig, parseEndpoint } from '../common/VpnConfigBuilder';
+import { resolvePersistentKeepalive } from '../common/Utils';
 import { configManager } from '../service/ConfigManager';
 
 const IPV4_PATTERN = /^\d+\.\d+\.\d+\.\d+$/;
@@ -135,15 +136,14 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
   private async startVpnConnection(wg: WgConfig): Promise<void> {
     const endpoint = parseEndpoint(wg.endpoint);
     hilog.info(APP_CONSTANTS.DOMAIN, TAG,
-      'Starting VPN endpoint=%{public}s:%{public}d', endpoint.serverIp, endpoint.serverPort);
+      'Starting VPN connection, endpoint port=%{public}d', endpoint.serverPort);
 
     // 0. 主机名解析为 IPv4 —— native 层 inet_addr 只认点分十进制
     let resolvedIp: string;
     try {
       resolvedIp = await resolveHostToIPv4(endpoint.serverIp);
       if (resolvedIp !== endpoint.serverIp) {
-        hilog.info(APP_CONSTANTS.DOMAIN, TAG,
-          'Resolved %{public}s -> %{public}s', endpoint.serverIp, resolvedIp);
+        hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'Endpoint hostname resolved');
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -191,7 +191,7 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
       presharedKey: wg.presharedKey || '',
       endpointIp: resolvedIp,
       endpointPort: endpoint.serverPort,
-      keepalive: wg.persistentKeepalive || 25
+      keepalive: resolvePersistentKeepalive(wg.persistentKeepalive)
     };
 
     const ret: number = wgNative.startVpn(this.tunFd, socketFd, nativeConfig);
@@ -230,6 +230,8 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
     if (this.statusTimer !== -1) {
       return;
     }
+    // Publish once immediately so the UI does not wait for the first interval.
+    this.publishStatus();
     this.statusTimer = setInterval(() => {
       this.publishStatus();
     }, 1500);
@@ -256,7 +258,11 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
       return;
     }
     const params: Record<string, Object> = { 'configId': this.activeConfigId };
-    const options: commonEventManager.CommonEventPublishData = { data: raw, parameters: params };
+    const options: commonEventManager.CommonEventPublishData = {
+      bundleName: APP_CONSTANTS.BUNDLE_NAME,
+      data: raw,
+      parameters: params
+    };
     commonEventManager.publish(APP_CONSTANTS.VPN_STATUS_EVENT, options, (err: BusinessError) => {
       if (err && err.code) {
         hilog.warn(APP_CONSTANTS.DOMAIN, TAG, 'publish status failed: %{public}d', err.code);
@@ -265,16 +271,25 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
   }
 
   // 广播一次终态（disconnected / failed），让 UI 立即离开 connecting/connected
-  private publishDisconnected(state: string): void {
+  private publishDisconnected(state: 'disconnected' | 'failed'): void {
     if (this.activeConfigId) {
       // The extension owns the terminal state. Clear persistence even when
       // the UI process is not alive to receive the common event.
       configManager.clearActiveConfigId(this.activeConfigId);
     }
-    const payload: string =
-      '{"connected":false,"handshakeAgeSec":-1,"rxBytes":0,"txBytes":0,"state":"' + state + '"}';
+    const payload: WgStatusPayload = {
+      connected: false,
+      handshakeAgeSec: -1,
+      rxBytes: 0,
+      txBytes: 0,
+      state
+    };
     const params: Record<string, Object> = { 'configId': this.activeConfigId };
-    const options: commonEventManager.CommonEventPublishData = { data: payload, parameters: params };
+    const options: commonEventManager.CommonEventPublishData = {
+      bundleName: APP_CONSTANTS.BUNDLE_NAME,
+      data: JSON.stringify(payload),
+      parameters: params
+    };
     commonEventManager.publish(APP_CONSTANTS.VPN_STATUS_EVENT, options, (err: BusinessError) => {
       if (err && err.code) {
         hilog.warn(APP_CONSTANTS.DOMAIN, TAG, 'publish disconnected failed: %{public}d', err.code);

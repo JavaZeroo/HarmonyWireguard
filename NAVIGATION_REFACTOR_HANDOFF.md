@@ -98,10 +98,10 @@ $env:DEVECO_SDK_HOME = "C:\Program Files\Huawei\DevEco Studio\sdk"
 
 **部署+截图**（真机是云端 HUAWEI MateBook Pro 2in1，`hdc tconn 172.16.100.1:36597`，App 是浮动窗口）：
 ```powershell
-hdc shell "aa force-stop com.example.harmonywireguard"
+hdc shell "aa force-stop com.javazeroo.harmonywireguard"
 hdc install -r <hap>
-hdc shell "aa start -b com.example.harmonywireguard -a EntryAbility"
-hdc shell "aa start -b com.example.harmonywireguard -a EntryAbility"   # 再来一次把 App 提到最前
+hdc shell "aa start -b com.javazeroo.harmonywireguard -a EntryAbility"
+hdc shell "aa start -b com.javazeroo.harmonywireguard -a EntryAbility"   # 再来一次把 App 提到最前
 hdc shell "snapshot_display -f /data/local/tmp/x.jpeg"
 # 用 PowerShell（不是 Git Bash，路径会坏）拉图： hdc file recv /data/local/tmp/x.jpeg <本地>
 ```

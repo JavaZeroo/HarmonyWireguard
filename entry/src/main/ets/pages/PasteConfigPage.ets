@@ -96,9 +96,9 @@ export struct PasteConfigPage {
       .width('100%')
       .layoutWeight(1)
       .onAreaChange((_oldArea, newArea) => {
-        const heightVp: number = this.getUIContext().px2vp(newArea.height as number);
-        if (heightVp > 0) {
-          this.contentViewportHeight = heightVp;
+        if (newArea.height > 0) {
+          // Area dimensions are already expressed in vp.
+          this.contentViewportHeight = newArea.height as number;
         }
       })
     }

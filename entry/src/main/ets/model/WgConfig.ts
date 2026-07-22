@@ -21,55 +21,18 @@ export interface WgConfig {
   behavior?: TunnelBehavior;
 }
 
-export interface WgStatus {
-  connected: boolean;
-  configId: string;
-  rxBytes: number;
-  txBytes: number;
-  lastHandshake: number;
-}
-
 // 扩展进程通过 commonEvent 回传的实时状态负载（native getStatus 的 JSON）
+export type WgTerminalState = 'disconnected' | 'failed';
+
 export interface WgStatusPayload {
   connected: boolean;
   handshakeAgeSec: number;  // 距上次成功握手的秒数，-1 表示尚未握手
   rxBytes: number;
   txBytes: number;
-  state?: string;           // 仅终态时带：'disconnected' | 'failed'
-}
-
-export interface WgInterfaceConfig {
-  privateKeyRef: string;
-  publicKey?: string;
-  addresses: string[];
-  dns: string[];
-  mtu?: number;
-  listenPort?: number;
-}
-
-export interface WgPeerConfig {
-  publicKey: string;
-  presharedKeyRef?: string;
-  endpointHost: string;
-  endpointPort: number;
-  allowedIPs: string[];
-  persistentKeepalive?: number;
+  state?: WgTerminalState;
 }
 
 export type RouteModeType = 'global' | 'lanOnly' | 'custom';
-
-export interface TunnelProfile {
-  id: string;
-  name: string;
-  icon?: string;
-  color?: string;
-  interface: WgInterfaceConfig;
-  peers: WgPeerConfig[];
-  routeMode: RouteModeType;
-  behavior: TunnelBehavior;
-  createdAt: number;
-  updatedAt: number;
-}
 
 export type TunnelStatusType = 'disconnected' | 'connecting' | 'connected' | 'failed';
 
@@ -81,7 +44,6 @@ export interface TunnelRuntimeState {
   txBytes: number;
   rxSpeed?: number;
   txSpeed?: number;
-  endpointResolvedIp?: string;
   latestError?: string;
   updatedAt: number;
 }

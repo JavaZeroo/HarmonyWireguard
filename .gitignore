@@ -1,5 +1,8 @@
 /oh_modules
+/node_modules
+/.idea
 **/build
+**/.preview
 /.hvigor
 .cxx
 /.clangd

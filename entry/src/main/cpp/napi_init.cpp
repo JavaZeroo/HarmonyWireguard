@@ -39,7 +39,7 @@ static napi_value UdpConnect(napi_env env, napi_callback_info info) {
     int32_t port = 0;
     napi_get_value_int32(env, args[1], &port);
 
-    WG_LOGI("UdpConnect: ip=%{public}s, port=%{public}d", ipAddr.c_str(), port);
+    WG_LOGI("UdpConnect requested, port=%{public}d", port);
     g_tunnelFd = CreateUdpSocket(ipAddr, static_cast<uint16_t>(port));
 
     napi_value result;
@@ -96,8 +96,10 @@ static napi_value StartVpn(napi_env env, napi_callback_info info) {
         WG_LOGI("Peer key decoded: ok=%{public}d len=%{public}zu", peer_ok, keyLen);
 
         if (!priv_ok || !peer_ok || keyLen != 32) {
-            WG_LOGE("KEY DECODE FAILED — handshake will be invalid. priv_ok=%{public}d peer_ok=%{public}d peer_len=%{public}zu",
-                    priv_ok, peer_ok, keyLen);
+            WG_LOGE(
+                "KEY DECODE FAILED — handshake will be invalid. "
+                "priv_ok=%{public}d peer_ok=%{public}d peer_len=%{public}zu",
+                priv_ok, peer_ok, keyLen);
         }
 
         if (!presharedKeyB64.empty()) {
@@ -121,7 +123,7 @@ static napi_value StartVpn(napi_env env, napi_callback_info info) {
         wg_set_peer_keepalive(peer, static_cast<uint16_t>(keepalive));
         peerConfigured = true;
 
-        WG_LOGI("WireGuard configured, endpoint=%{public}s:%{public}d", endpointIp.c_str(), endpointPort);
+        WG_LOGI("WireGuard peer configured, endpoint port=%{public}d", endpointPort);
     }
 
     int32_t ret = StartPacketIO(tunFd, socketFd);

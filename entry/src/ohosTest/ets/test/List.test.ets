@@ -3,6 +3,7 @@ import configTest from './Config.test'
 import vpnRoutePlanTest from './VpnRoutePlan.test'
 import logServiceTest from './LogService.test'
 import diagnosticsTest from './Diagnostics.test'
+import statusPayloadTest from './StatusPayload.test'
 
 export default function testsuite() {
   abilityTest()
@@ -10,4 +11,5 @@ export default function testsuite() {
   vpnRoutePlanTest()
   logServiceTest()
   diagnosticsTest()
+  statusPayloadTest()
 }

@@ -12,7 +12,8 @@ interface TrafficPoint {
 export struct TrafficChart {
   @Prop rxSpeed: number = 0;
   @Prop txSpeed: number = 0;
-  @State history: TrafficPoint[] = [];
+  @State hasEnoughSamples: boolean = false;
+  private history: TrafficPoint[] = [];
   private timer: number = -1;
   private maxPoints: number = 60;
   private isReady: boolean = false;
@@ -25,6 +26,9 @@ export struct TrafficChart {
       this.history.push({ rx: this.rxSpeed, tx: this.txSpeed });
       if (this.history.length > this.maxPoints) {
         this.history.shift();
+      }
+      if (!this.hasEnoughSamples && this.history.length >= 2) {
+        this.hasEnoughSamples = true;
       }
       if (this.isReady) {
         this.draw();
@@ -139,7 +143,7 @@ export struct TrafficChart {
             this.draw();
           })
 
-        if (this.history.length < 2) {
+        if (!this.hasEnoughSamples) {
           Text(getString($r('app.string.hint_waiting_data')))
             .fontSize(TYPOGRAPHY.caption.size)
             .fontColor($r('app.color.text_tertiary'))

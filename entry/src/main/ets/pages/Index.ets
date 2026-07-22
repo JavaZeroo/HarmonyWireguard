@@ -8,7 +8,6 @@ import { SettingsPage } from './SettingsPage';
 import { AboutPage } from './AboutPage';
 import { ConfigEditPage } from './ConfigEditPage';
 import { ConfigPreviewPage } from './ConfigPreviewPage';
-import { TunnelDetailPage } from './TunnelDetailPage';
 import { APP_CONSTANTS } from '../common/Constants';
 import { SPACING, RADIUS, TYPOGRAPHY, Breakpoint, getBreakpoint, getString } from '../common/DesignSystem';
 import { formatBytes } from '../common/Formatters';
@@ -21,8 +20,10 @@ import { TunnelDetailPanel } from '../components/tunnel/TunnelDetailPanel';
 import { ImportActions } from '../service/ImportActions';
 import { DialogHelper } from '../common/DialogHelper';
 import { PageHeader } from '../components/app/PageHeader';
+import { AdaptiveTabBar } from '../components/app/AdaptiveTabBar';
 import { PasteConfigPage } from './PasteConfigPage';
 import { settingsService } from '../service/SettingsService';
+import { decodeWgStatusPayload } from '../common/WgStatusCodec';
 
 const TAG = 'IndexPage';
 const ACTIVE_RESTORE_TIMEOUT_MS = 15000;
@@ -60,7 +61,6 @@ struct Index {
   @State txBytes: number = 0;
   @State lastHandshakeAt: number = -1;
   @State selectedConfigId: string = '';
-  @State breakpoint: Breakpoint = Breakpoint.COMPACT;
   @State windowWidth: number = 360;
   @State currentTabIndex: number = 0;
   @State miniExpanded: boolean = false;
@@ -130,7 +130,8 @@ struct Index {
     }
     this.isStatusSubscriberPending = true;
     const info: commonEventManager.CommonEventSubscribeInfo = {
-      events: [APP_CONSTANTS.VPN_STATUS_EVENT]
+      events: [APP_CONSTANTS.VPN_STATUS_EVENT],
+      publisherBundleName: APP_CONSTANTS.BUNDLE_NAME
     };
     commonEventManager.createSubscriber(info,
       (err: BusinessError, subscriber: commonEventManager.CommonEventSubscriber) => {
@@ -171,10 +172,9 @@ struct Index {
     if (!configId) {
       return;
     }
-    let payload: WgStatusPayload;
-    try {
-      payload = JSON.parse(body) as WgStatusPayload;
-    } catch (e) {
+    const payload: WgStatusPayload | null = decodeWgStatusPayload(body);
+    if (payload === null) {
+      hilog.warn(APP_CONSTANTS.DOMAIN, TAG, 'Ignored invalid VPN status payload');
       return;
     }
     if (this.activeConfigId === configId) {
@@ -225,7 +225,6 @@ struct Index {
     } catch {
       this.windowWidth = 360;
     }
-    this.breakpoint = getBreakpoint(this.windowWidth);
   }
 
   loadConfigs(): void {
@@ -298,11 +297,6 @@ struct Index {
   getActiveConfig(): WgConfig | undefined {
     if (!this.activeConfigId) return undefined;
     return this.configs.find(c => c.id === this.activeConfigId);
-  }
-
-  getSelectedConfig(): WgConfig | undefined {
-    if (!this.selectedConfigId) return undefined;
-    return this.configs.find(c => c.id === this.selectedConfigId);
   }
 
   async toggleVpn(config: WgConfig, enable: boolean): Promise<boolean> {
@@ -399,10 +393,6 @@ struct Index {
     } else if (name === 'ConfigPreview') {
       NavDestination() {
         ConfigPreviewPage({ navParam: param, pageStack: this.pageStack })
-      }.hideTitleBar(true)
-    } else if (name === 'TunnelDetail') {
-      NavDestination() {
-        TunnelDetailPage({ navConfigId: param as string, pageStack: this.pageStack })
       }.hideTitleBar(true)
     } else if (name === 'PasteConfig') {
       NavDestination() { PasteConfigPage({ pageStack: this.pageStack }) }.hideTitleBar(true)
@@ -619,7 +609,10 @@ struct Index {
           if (!(this.detailCoverShow && this.detailCoverId === config.id)) {
             ListItem() {
               TunnelListItem({
-                config: config,
+                name: config.name,
+                endpoint: config.endpoint,
+                allowedIPs: config.allowedIPs,
+                persistentKeepalive: config.persistentKeepalive,
                 status: config.id === this.activeConfigId ? this.activeStatus : 'disconnected',
                 selected: !this.isCompactUX() && config.id === this.expandedDetailId(),
                 compact: this.compactMode,
@@ -831,7 +824,7 @@ struct Index {
   // 单栏 UX：< 960vp 一律单栏 + 全屏详情 Cover；≥960vp 才启用侧栏与主从分栏。
   // 这样手机横屏 / 平板竖屏不会被 104vp 导航栏与 360vp 主栏挤压详情内容。
   private isCompactUX(): boolean {
-    return this.breakpoint !== Breakpoint.EXPANDED;
+    return getBreakpoint(this.windowWidth) !== Breakpoint.EXPANDED;
   }
 
   // 分栏主栏宽度（仅 lg 调用）：超大屏（≥1440vp）更宽（占比思想）。
@@ -919,98 +912,6 @@ struct Index {
     .height('100%')
     .alignItems(HorizontalAlign.Center)
     .padding({ left: SPACING.lg, right: SPACING.lg, top: SPACING.md, bottom: SPACING.lg })
-  }
-
-  // 手机底部胶囊项：未选中仅图标，选中态展开为品牌色填充胶囊（图标 + 文字）。
-  @Builder
-  CapsuleItemH(index: number, label: string, icon: Resource) {
-    Row({ space: 6 }) {
-      SymbolGlyph(icon)
-        .fontSize(22)
-        .fontColor([this.currentTabIndex === index ? $r('app.color.primary') : $r('app.color.text_secondary')])
-      if (this.currentTabIndex === index) {
-        Text(label)
-          .fontSize(TYPOGRAPHY.body_sm.size)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.primary'))
-          .maxLines(1)
-      }
-    }
-    .justifyContent(FlexAlign.Center)
-    .height(48)
-    .padding({ left: 16, right: 16 })
-    .backgroundColor(this.currentTabIndex === index ? $r('app.color.primary_bg') : Color.Transparent)
-    .borderRadius(22)
-    .hoverEffect(HoverEffect.Highlight)
-    .accessibilityRole(AccessibilityRoleType.BUTTON)
-    .accessibilityText(label)
-    .accessibilityDescription(this.currentTabIndex === index
-      ? getString($r('app.string.accessibility_selected')) : '')
-    .onClick(() => {
-      this.getUIContext().animateTo({ duration: 250, curve: Curve.FastOutSlowIn }, () => {
-        this.currentTabIndex = index;
-      });
-    })
-  }
-
-  // 平板/2in1 侧栏胶囊项：图标 + 文字竖排，选中态填充胶囊。
-  @Builder
-  CapsuleItemV(index: number, label: string, icon: Resource) {
-    Column({ space: 2 }) {
-      SymbolGlyph(icon)
-        .fontSize(22)
-        .fontColor([this.currentTabIndex === index ? $r('app.color.primary') : $r('app.color.text_secondary')])
-      Text(label)
-        .fontSize(TYPOGRAPHY.caption.size)
-        .fontWeight(this.currentTabIndex === index ? FontWeight.Medium : FontWeight.Regular)
-        .fontColor(this.currentTabIndex === index ? $r('app.color.primary') : $r('app.color.text_secondary'))
-        .maxLines(1)
-    }
-    .justifyContent(FlexAlign.Center)
-    .alignItems(HorizontalAlign.Center)
-    .width(60)
-    .height(52)
-    .backgroundColor(this.currentTabIndex === index ? $r('app.color.primary_bg') : Color.Transparent)
-    .borderRadius(16)
-    .hoverEffect(HoverEffect.Highlight)
-    .accessibilityRole(AccessibilityRoleType.BUTTON)
-    .accessibilityText(label)
-    .accessibilityDescription(this.currentTabIndex === index
-      ? getString($r('app.string.accessibility_selected')) : '')
-    .onClick(() => {
-      this.getUIContext().animateTo({ duration: 250, curve: Curve.FastOutSlowIn }, () => {
-        this.currentTabIndex = index;
-      });
-    })
-  }
-
-  // 手机底部横向胶囊 Tab 栏
-  @Builder
-  TabCapsuleH() {
-    Row({ space: 4 }) {
-      this.CapsuleItemH(0, getString($r('app.string.tab_tunnels')), $r('sys.symbol.wifi'))
-      this.CapsuleItemH(1, getString($r('app.string.page_settings')), $r('sys.symbol.list_bullet'))
-    }
-    .padding(6)
-    .backgroundColor($r('app.color.glass_bar'))
-    .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
-    .borderRadius(28)
-    .shadow({ radius: 20, color: 'rgba(0,0,0,0.18)', offsetY: 6 })
-  }
-
-  // 平板/2in1 左侧纵向胶囊 Tab 栏
-  @Builder
-  TabCapsuleV() {
-    Column({ space: 4 }) {
-      this.CapsuleItemV(0, getString($r('app.string.tab_tunnels')), $r('sys.symbol.wifi'))
-      this.CapsuleItemV(1, getString($r('app.string.page_settings')), $r('sys.symbol.list_bullet'))
-    }
-    .padding(6)
-    .backgroundColor($r('app.color.glass_bar'))
-    .backgroundBlurStyle(BlurStyle.COMPONENT_THICK)
-    .borderRadius(28)
-    .shadow({ radius: 20, color: 'rgba(0,0,0,0.18)', offsetY: 6 })
-    .margin({ left: 16 })
   }
 
   // 打开某隧道详情：手机端一镜到底展开全屏 Cover；平板/2in1 右栏内联。
@@ -1226,7 +1127,12 @@ struct Index {
       if (this.activeConfigId !== '') {
         this.MiniBar()
       }
-      this.TabCapsuleH()
+      AdaptiveTabBar({
+        currentIndex: this.currentTabIndex,
+        onChange: (index: number) => {
+          this.currentTabIndex = index;
+        }
+      })
     }
     .alignItems(HorizontalAlign.Center)
     .width('92%')
@@ -1327,7 +1233,13 @@ struct Index {
           this.BottomDock()
         } else {
           // 平板/2in1：左侧纵向胶囊 Tab 栏
-          this.TabCapsuleV()
+          AdaptiveTabBar({
+            currentIndex: this.currentTabIndex,
+            vertical: true,
+            onChange: (index: number) => {
+              this.currentTabIndex = index;
+            }
+          })
         }
       }
       .width('100%')
@@ -1336,8 +1248,10 @@ struct Index {
       .onAreaChange((_oldArea, newArea) => {
         if (newArea.width > 0) {
           // Area.width 已是 vp；再次 px2vp 会把横屏宽度缩小一遍并误判成手机布局。
-          this.windowWidth = newArea.width as number;
-          this.breakpoint = getBreakpoint(this.windowWidth);
+          const nextWidth = newArea.width as number;
+          if (Math.abs(nextWidth - this.windowWidth) >= 1) {
+            this.windowWidth = nextWidth;
+          }
         }
       })
     }
