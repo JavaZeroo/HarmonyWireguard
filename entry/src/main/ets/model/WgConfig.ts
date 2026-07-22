@@ -1,3 +1,10 @@
+export interface TunnelBehavior {
+  autoConnect: boolean;
+  reconnectOnNetworkChange: boolean;
+  allowLanAccess: boolean;
+  blockIpv6Leak: boolean;
+}
+
 export interface WgConfig {
   id: string;
   name: string;
@@ -10,6 +17,8 @@ export interface WgConfig {
   allowedIPs: string;
   endpoint: string;
   persistentKeepalive: number;
+  // Optional for backward compatibility with configurations saved before behavior settings were persisted.
+  behavior?: TunnelBehavior;
 }
 
 export interface WgStatus {
@@ -49,13 +58,6 @@ export interface WgPeerConfig {
 
 export type RouteModeType = 'global' | 'lanOnly' | 'custom';
 
-export interface TunnelBehavior {
-  autoConnect: boolean;
-  reconnectOnNetworkChange: boolean;
-  allowLanAccess: boolean;
-  blockIpv6Leak: boolean;
-}
-
 export interface TunnelProfile {
   id: string;
   name: string;
@@ -87,21 +89,16 @@ export interface TunnelRuntimeState {
 export interface DiagnosticItem {
   id: string;
   title: string;
-  status: 'pass' | 'warning' | 'fail' | 'checking';
+  status: DiagnosticStatusType;
   description?: string;
   suggestion?: string;
 }
 
+export type DiagnosticStatusType = 'pass' | 'warning' | 'fail' | 'checking';
+
 export interface TunnelDiagnosticState {
   tunnelId: string;
-  permission: DiagnosticItem;
-  endpointResolve: DiagnosticItem;
-  endpointReachability: DiagnosticItem;
-  handshake: DiagnosticItem;
-  dns: DiagnosticItem;
-  route: DiagnosticItem;
-  ipv6: DiagnosticItem;
-  localNetwork: DiagnosticItem;
+  items: DiagnosticItem[];
   updatedAt: number;
 }
 

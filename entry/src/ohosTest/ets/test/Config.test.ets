@@ -82,6 +82,51 @@ export default function configTest() {
       expect(ConfigParser.parseFromText('this is not a config').success).assertFalse();
     });
 
+    it('configParser_ipv6OnlyFailsWithoutSilentIpv4Fallback', 0, () => {
+      const ipv6Only = VALID_CONFIG.replace('0.0.0.0/0, ::/0', '::/0');
+      expect(ConfigParser.parseFromText(ipv6Only).success).assertFalse();
+    });
+
+    it('configParser_invalidAllowedIpFails', 0, () => {
+      const invalidRoute = VALID_CONFIG.replace('0.0.0.0/0, ::/0', '10.0.0.0/33');
+      expect(ConfigParser.parseFromText(invalidRoute).success).assertFalse();
+    });
+
+    it('configParser_ipv6EndpointFailsEarly', 0, () => {
+      const ipv6Endpoint = VALID_CONFIG.replace('vpn.example.com:51820', '[2001:db8::1]:51820');
+      expect(ConfigParser.parseFromText(ipv6Endpoint).success).assertFalse();
+    });
+
+    it('configParser_invalidPresharedKeyFails', 0, () => {
+      const invalidPsk = VALID_CONFIG.replace('[Peer]\n', '[Peer]\nPresharedKey = invalid\n');
+      expect(ConfigParser.parseFromText(invalidPsk).success).assertFalse();
+    });
+
+    it('configParser_invalidKeepaliveFails', 0, () => {
+      const invalidKeepalive = VALID_CONFIG.replace('PersistentKeepalive = 25', 'PersistentKeepalive = 70000');
+      expect(ConfigParser.parseFromText(invalidKeepalive).success).assertFalse();
+    });
+
+    it('configParser_invalidAddressFails', 0, () => {
+      const invalidAddress = VALID_CONFIG.replace('Address = 10.0.0.2/32', 'Address = 10.0.0.2/99');
+      expect(ConfigParser.parseFromText(invalidAddress).success).assertFalse();
+    });
+
+    it('configParser_ipv6AddressFailsEarly', 0, () => {
+      const ipv6Address = VALID_CONFIG.replace('Address = 10.0.0.2/32', 'Address = 2001:db8::2/128');
+      expect(ConfigParser.parseFromText(ipv6Address).success).assertFalse();
+    });
+
+    it('configParser_invalidDnsHostnameFails', 0, () => {
+      const invalidDns = VALID_CONFIG.replace('DNS = 1.1.1.1', 'DNS = not-an-ip');
+      expect(ConfigParser.parseFromText(invalidDns).success).assertFalse();
+    });
+
+    it('configParser_ipv6DnsFailsEarly', 0, () => {
+      const ipv6Dns = VALID_CONFIG.replace('DNS = 1.1.1.1', 'DNS = 2001:4860:4860::8888');
+      expect(ConfigParser.parseFromText(ipv6Dns).success).assertFalse();
+    });
+
     // ---- 回归守护：修复「点连接后连上又立刻断开」的开关去抖逻辑 ----
     it('toggle_freshConnect_allowed', 0, () => {
       const ctx: ToggleContext = { activeConfigId: '', connectingId: '', activeStatus: 'disconnected' };
@@ -96,6 +141,11 @@ export default function configTest() {
     it('toggle_reConnectActive_ignored', 0, () => {
       const ctx: ToggleContext = { activeConfigId: 'A', connectingId: '', activeStatus: 'connected' };
       expect(shouldApplyToggle('A', true, ctx)).assertFalse();
+    });
+
+    it('toggle_switchWhileActive_ignored', 0, () => {
+      const ctx: ToggleContext = { activeConfigId: 'A', connectingId: '', activeStatus: 'connected' };
+      expect(shouldApplyToggle('B', true, ctx)).assertFalse();
     });
 
     it('toggle_disconnectActive_allowed', 0, () => {

@@ -61,7 +61,9 @@ export struct RouteModeSelector {
       .margin({ left: SPACING.sm })
     }
     .width('100%')
+    .constraintSize({ minHeight: 48 })
     .padding(SPACING.sm)
+    .accessibilityText(label + ', ' + description)
     .onClick(() => {
       this.mode = value;
       this.updateAllowedIPs();
@@ -88,7 +90,7 @@ export struct RouteModeSelector {
 
         this.ModeOption('custom',
           getString($r('app.string.route_custom')),
-          'Custom AllowedIPs')
+          getString($r('app.string.route_custom_description')))
       }
       .width('100%')
       .padding(SPACING.sm)
@@ -100,7 +102,7 @@ export struct RouteModeSelector {
         TextInput({ placeholder: getString($r('app.string.placeholder_custom_cidrs')), text: this.customCidrs })
           .fontSize(TYPOGRAPHY.body_md.size)
           .width('100%')
-          .height(44)
+          .height(48)
           .backgroundColor($r('app.color.surface_subtle'))
           .borderRadius(RADIUS.md)
           .onChange((val) => {

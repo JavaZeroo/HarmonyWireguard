@@ -200,6 +200,10 @@ export function shouldApplyToggle(configId: string, enable: boolean, ctx: Toggle
     if (ctx.connectingId !== '') {
       return false; // 已有连接进行中
     }
+    if (ctx.activeConfigId !== '' && ctx.activeConfigId !== configId &&
+      (ctx.activeStatus === 'connected' || ctx.activeStatus === 'connecting')) {
+      return false; // 必须先停止当前隧道，扩展不支持运行中重配置
+    }
     if (ctx.activeConfigId === configId &&
       (ctx.activeStatus === 'connected' || ctx.activeStatus === 'connecting')) {
       return false; // 该配置已连接/连接中

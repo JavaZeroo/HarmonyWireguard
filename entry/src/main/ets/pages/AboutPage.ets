@@ -1,34 +1,14 @@
 import { SPACING, RADIUS, TYPOGRAPHY, SHADOW, getString } from '../common/DesignSystem';
 import { SectionCard } from '../components/common/SectionCard';
+import { PageHeader } from '../components/app/PageHeader';
 
 @Component
 export struct AboutPage {
-  @Consume('pageStack') pageStack: NavPathStack;
+  pageStack: NavPathStack = new NavPathStack();
 
   build() {
     Column() {
-      // Header
-      Row() {
-        SymbolGlyph($r('sys.symbol.chevron_left'))
-          .fontSize(24)
-          .fontColor([$r('app.color.text_primary')])
-          .onClick(() => {
-            this.pageStack.pop();
-          })
-
-        Text(getString($r('app.string.page_about')))
-          .fontSize(TYPOGRAPHY.title_sm.size)
-          .fontWeight(TYPOGRAPHY.title_sm.weight)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-
-        Blank().width(24)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.md, right: SPACING.md })
-      .backgroundColor($r('app.color.surface'))
+      PageHeader({ title: getString($r('app.string.page_about')), pageStack: this.pageStack })
 
       Scroll() {
         Column() {
@@ -47,7 +27,7 @@ export struct AboutPage {
             .shadow({ radius: 20, color: 'rgba(0,125,255,0.20)', offsetX: 0, offsetY: 6 })
             .margin({ bottom: SPACING.md })
 
-            Text(getString($r('app.string.app_name')))
+            Text(getString($r('app.string.product_name')))
               .fontSize(TYPOGRAPHY.title_md.size)
               .fontWeight(FontWeight.Bold)
               .fontColor($r('app.color.text_primary'))

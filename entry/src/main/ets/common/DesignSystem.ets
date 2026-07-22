@@ -88,10 +88,16 @@ export enum Breakpoint {
   EXPANDED = 'expanded'
 }
 
+let resourceContext: Context | null = null;
+
+export function initializeDesignSystem(context: Context): void {
+  resourceContext = context;
+}
+
 export function getBreakpoint(widthVp: number): Breakpoint {
   if (widthVp < 600) {
     return Breakpoint.COMPACT;
-  } else if (widthVp < 840) {
+  } else if (widthVp < 960) {
     return Breakpoint.MEDIUM;
   } else {
     return Breakpoint.EXPANDED;
@@ -108,8 +114,11 @@ export function getWindowWidth(): number {
 
 // Helper to get string resource safely
 export function getString(resource: Resource): string {
+  if (resourceContext === null) {
+    return '';
+  }
   try {
-    return getContext().resourceManager.getStringSync(resource.id);
+    return resourceContext.resourceManager.getStringSync(resource.id);
   } catch {
     return '';
   }

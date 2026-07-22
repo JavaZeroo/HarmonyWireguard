@@ -1,5 +1,5 @@
 import { common } from '@kit.AbilityKit';
-import { BusinessError, pasteboard } from '@kit.BasicServicesKit';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { picker, fileIo as fs } from '@kit.CoreFileKit';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
@@ -13,6 +13,10 @@ const TAG = 'ImportActions';
 
 // 导入动作从原「添加配置」整页抽出，供 FAB 菜单等入口直接调用（无需整页）。
 export class ImportActions {
+  static isQrScanSupported(): boolean {
+    return canIUse('SystemCapability.Multimedia.Scan.ScanBarcode');
+  }
+
   private static toast(ctx: UIContext, msg: string): void {
     try {
       ctx.getPromptAction().showToast({ message: msg, duration: 2500 });
@@ -25,7 +29,8 @@ export class ImportActions {
     if (result.success && result.config) {
       stack.pushPath({ name: 'ConfigPreview', param: result.config });
     } else {
-      ImportActions.toast(ctx, ConfigParser.resolveErrorMessage(result.error ?? $r('app.string.error_parse_config')));
+      ImportActions.toast(ctx,
+        ConfigParser.resolveErrorMessage(result.error ?? $r('app.string.error_parse_config'), ctx));
     }
   }
 
@@ -33,26 +38,10 @@ export class ImportActions {
     stack.pushPath({ name: 'ConfigEdit' });
   }
 
-  static async fromClipboard(ctx: UIContext, stack: NavPathStack): Promise<void> {
-    try {
-      const board = pasteboard.getSystemPasteboard();
-      const data = await board.getData();
-      if (!data || !data.hasType(pasteboard.MIMETYPE_TEXT_PLAIN)) {
-        ImportActions.toast(ctx, getString($r('app.string.error_parse_config')));
-        return;
-      }
-      const text = data.getPrimaryText();
-      if (!text || text.trim().length === 0) {
-        ImportActions.toast(ctx, getString($r('app.string.error_parse_config')));
-        return;
-      }
-      hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'clipboard text len=%{public}d', text.length);
-      ImportActions.handleResult(ctx, stack, ConfigParser.parseFromText(text));
-    } catch (err) {
-      const e = err as BusinessError;
-      hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'clipboard error: %{public}s', e?.message ?? String(err));
-      ImportActions.toast(ctx, '剪贴板读取失败');
-    }
+  static pasteConfig(stack: NavPathStack): void {
+    // READ_PASTEBOARD is system_basic on API 22. A third-party app should let
+    // the user paste into an input field instead of reading the clipboard.
+    stack.pushPath({ name: 'PasteConfig' });
   }
 
   static async fromFile(ctx: UIContext, stack: NavPathStack): Promise<void> {
@@ -84,28 +73,32 @@ export class ImportActions {
     } catch (err) {
       const e = err as BusinessError;
       hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'file error: %{public}s', e?.message ?? String(err));
-      ImportActions.toast(ctx, '文件读取失败');
+      ImportActions.toast(ctx, getString($r('app.string.error_file_read')));
     }
   }
 
   static async scanQR(ctx: UIContext, stack: NavPathStack): Promise<void> {
-    try {
-      const hostCtx = ctx.getHostContext() as common.UIAbilityContext;
-      const options: scanBarcode.ScanOptions = {
-        scanTypes: [scanCore.ScanType.QR_CODE],
-        enableMultiMode: false,
-        enableAlbum: true
-      };
-      const result = await scanBarcode.startScanForResult(hostCtx, options);
-      if (!result || !result.originalValue || result.originalValue.length === 0) {
-        return;
+    if (canIUse('SystemCapability.Multimedia.Scan.ScanBarcode')) {
+      try {
+        const hostCtx = ctx.getHostContext() as common.UIAbilityContext;
+        const options: scanBarcode.ScanOptions = {
+          scanTypes: [scanCore.ScanType.QR_CODE],
+          enableMultiMode: false,
+          enableAlbum: true
+        };
+        const result = await scanBarcode.startScanForResult(hostCtx, options);
+        if (!result || !result.originalValue || result.originalValue.length === 0) {
+          return;
+        }
+        hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'qr text len=%{public}d', result.originalValue.length);
+        ImportActions.handleResult(ctx, stack, ConfigParser.parseFromText(result.originalValue));
+      } catch (err) {
+        const e = err as BusinessError;
+        hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'scan error: %{public}s', e?.message ?? String(err));
+        ImportActions.toast(ctx, getString($r('app.string.error_qr_scan')));
       }
-      hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'qr text len=%{public}d', result.originalValue.length);
-      ImportActions.handleResult(ctx, stack, ConfigParser.parseFromText(result.originalValue));
-    } catch (err) {
-      const e = err as BusinessError;
-      hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'scan error: %{public}s', e?.message ?? String(err));
-      ImportActions.toast(ctx, '扫码失败');
+    } else {
+      ImportActions.toast(ctx, getString($r('app.string.error_qr_not_supported')));
     }
   }
 }

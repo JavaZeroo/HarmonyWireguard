@@ -3,54 +3,103 @@ import { formatBytes } from '../../common/Formatters';
 import { SectionCard } from '../common/SectionCard';
 import { TrafficChart } from '../diagnostics/TrafficChart';
 import { HandshakeCard } from '../diagnostics/HandshakeCard';
-import { DiagnosticChecklist } from '../diagnostics/DiagnosticChecklist';
 import { RuntimeLogList } from '../diagnostics/RuntimeLogList';
+import { DiagnosticChecklist } from '../diagnostics/DiagnosticChecklist';
 import { ExportReportButton } from '../diagnostics/ExportReportButton';
 import { configManager } from '../../service/ConfigManager';
 import { DiagnosticService } from '../../service/DiagnosticService';
 import { logService } from '../../service/LogService';
 import { tunnelRuntimeService } from '../../service/TunnelRuntimeService';
-import type { WgConfig, DiagnosticItem, TunnelRuntimeState, RuntimeLogEntry } from '../../model/WgConfig';
+import type {
+  DiagnosticItem,
+  RuntimeLogEntry,
+  TunnelDiagnosticState,
+  TunnelRuntimeState,
+  WgConfig
+} from '../../model/WgConfig';
 import { deriveRouteMode } from '../../common/Utils';
+import { pasteboard } from '@kit.BasicServicesKit';
 
 @Component
 export struct TunnelDetailPanel {
   @Prop @Watch('onConfigIdChange') configId: string = '';
   // 详情内容最大宽度（缩进布局）：宽屏分栏时限宽居中，0 = 不限（手机全屏 Cover）。
   @Prop contentMaxWidth: number = 0;
+  @Prop compact: boolean = false;
   @State config: WgConfig | null = null;
   @State runtime: TunnelRuntimeState | null = null;
-  @State diagnostics: DiagnosticItem[] = [];
   @State logs: RuntimeLogEntry[] = [];
-  @State isRunningDiagnostics: boolean = false;
+  @State diagnostics: DiagnosticItem[] = [];
+  @State isDiagnosing: boolean = false;
+  @State isAllowedIpsExpanded: boolean = false;
 
   // 详情页发起的编辑/删除（由宿主 Index 提供实现：导航到编辑页 / 二次确认后删除并刷新）
   onEdit?: () => void;
   onDelete?: () => void;
 
-  private timer: number = -1;
+  private unsubscribeRuntime?: () => void;
+  private diagnosticRunId: number = 0;
+  private isActive: boolean = false;
 
   aboutToAppear(): void {
+    this.isActive = true;
     this.loadConfig();
-    this.timer = setInterval(() => {
-      this.refreshData();
-    }, 1000);
+    this.unsubscribeRuntime = tunnelRuntimeService.subscribe((states) => {
+      if (!this.config) {
+        return;
+      }
+      const previousStatus = this.runtime?.status;
+      const hadHandshake = this.runtime?.lastHandshakeAt !== undefined;
+      const nextRuntime = states.get(this.config.id) ?? null;
+      this.runtime = nextRuntime;
+      this.logs = logService.getLogs(this.config.id);
+      const hasHandshake = nextRuntime?.lastHandshakeAt !== undefined;
+      if (nextRuntime?.status !== previousStatus || hasHandshake !== hadHandshake) {
+        this.runDiagnostics();
+      }
+    });
   }
 
   aboutToDisappear(): void {
-    if (this.timer !== -1) {
-      clearInterval(this.timer);
-      this.timer = -1;
+    this.isActive = false;
+    this.diagnosticRunId++;
+    this.isDiagnosing = false;
+    if (this.unsubscribeRuntime !== undefined) {
+      this.unsubscribeRuntime();
+      this.unsubscribeRuntime = undefined;
     }
   }
 
   private onConfigIdChange(): void {
+    this.isAllowedIpsExpanded = false;
     this.loadConfig();
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
+    } catch {}
+  }
+
+  private async copyAllowedIps(): Promise<void> {
+    if (this.config === null || this.config.allowedIPs.length === 0) {
+      return;
+    }
+    try {
+      const board = pasteboard.getSystemPasteboard();
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.config.allowedIPs);
+      await board.setData(data);
+      this.showToast(getString($r('app.string.hint_copied')));
+    } catch {
+      this.showToast(getString($r('app.string.error_copy_failed')));
+    }
   }
 
   private loadConfig(): void {
     if (!this.configId) {
       this.config = null;
+      this.diagnostics = [];
+      this.diagnosticRunId++;
       return;
     }
     const cfg = configManager.getConfigById(this.configId);
@@ -61,33 +110,33 @@ export struct TunnelDetailPanel {
       this.runDiagnostics();
     } else {
       this.config = null;
+      this.diagnostics = [];
+      this.diagnosticRunId++;
     }
   }
 
-  private refreshData(): void {
-    if (this.config) {
-      this.runtime = tunnelRuntimeService.getState(this.config.id) || null;
-      this.logs = logService.getLogs(this.config.id);
+  private runDiagnostics(): void {
+    if (this.config === null) {
+      return;
     }
-  }
-
-  private async runDiagnostics(): Promise<void> {
-    if (!this.config || this.isRunningDiagnostics) return;
-    this.isRunningDiagnostics = true;
-
-    const result = await DiagnosticService.runDiagnostics(this.config.id, this.config.endpoint);
-    this.diagnostics = [
-      result.permission,
-      result.endpointResolve,
-      result.endpointReachability,
-      result.handshake,
-      result.dns,
-      result.route,
-      result.ipv6,
-      result.localNetwork
-    ];
-
-    this.isRunningDiagnostics = false;
+    const config = this.config;
+    const runtime = this.runtime;
+    const runId = ++this.diagnosticRunId;
+    this.diagnostics = DiagnosticService.evaluateLocal(config, runtime);
+    this.isDiagnosing = true;
+    DiagnosticService.runDiagnostics(config, runtime)
+      .then((state: TunnelDiagnosticState) => {
+        if (!this.isActive || runId !== this.diagnosticRunId || this.config?.id !== state.tunnelId) {
+          return;
+        }
+        this.diagnostics = state.items;
+        this.isDiagnosing = false;
+      })
+      .catch(() => {
+        if (this.isActive && runId === this.diagnosticRunId) {
+          this.isDiagnosing = false;
+        }
+      });
   }
 
   private getRouteModeLabel(): string {
@@ -135,7 +184,7 @@ export struct TunnelDetailPanel {
     Scroll() {
       // 外层居中容器：宽屏时把限宽后的内容在详情区居中（缩进布局）。
       Column() {
-      Column({ space: SPACING.md }) {
+      Column({ space: this.compact ? SPACING.sm : SPACING.md }) {
         if (!this.config) {
           Text(getString($r('app.string.error_config_not_found')))
             .fontSize(TYPOGRAPHY.body_lg.size)
@@ -145,7 +194,7 @@ export struct TunnelDetailPanel {
             .textAlign(TextAlign.Center)
         } else {
           // Status Summary
-          SectionCard({ cardPadding: SPACING.lg }) {
+          SectionCard({ cardPadding: this.compact ? SPACING.md : SPACING.lg }) {
             Column() {
               Row() {
                 Circle()
@@ -166,13 +215,13 @@ export struct TunnelDetailPanel {
                 HandshakeCard({ lastHandshakeAt: this.runtime.lastHandshakeAt })
               }
 
-              Text('Endpoint: ' + this.config.endpoint)
+              Text(getString($r('app.string.field_endpoint')) + ': ' + this.config.endpoint)
                 .fontSize(TYPOGRAPHY.body_sm.size)
                 .fontColor($r('app.color.text_secondary'))
                 .width('100%')
                 .margin({ bottom: SPACING.xs })
 
-              Text('Address: ' + this.config.address)
+              Text(getString($r('app.string.field_address')) + ': ' + this.config.address)
                 .fontSize(TYPOGRAPHY.body_sm.size)
                 .fontColor($r('app.color.text_secondary'))
                 .width('100%')
@@ -180,37 +229,42 @@ export struct TunnelDetailPanel {
             .width('100%')
           }
 
-          // 编辑 / 删除该配置（详情页内唯一入口——坏配置就靠这里删）
-          Row({ space: SPACING.md }) {
-            Button(getString($r('app.string.button_edit')))
-              .layoutWeight(1)
-              .height(42)
-              .fontSize(TYPOGRAPHY.body_sm.size)
-              .fontColor($r('app.color.primary'))
-              .backgroundColor($r('app.color.primary_bg'))
-              .borderRadius(RADIUS.md)
-              .hoverEffect(HoverEffect.Highlight)
-              .onClick(() => {
-                this.onEdit?.();
-              })
+          // 仅在宿主提供真实动作时展示，避免出现点击无响应的伪按钮。
+          if (this.onEdit !== undefined && this.onDelete !== undefined) {
+            Row({ space: SPACING.md }) {
+              Button(getString($r('app.string.button_edit')))
+                .layoutWeight(1)
+                .height(48)
+                .fontSize(TYPOGRAPHY.body_sm.size)
+                .fontColor($r('app.color.primary'))
+                .backgroundColor($r('app.color.primary_bg'))
+                .borderRadius(RADIUS.md)
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  this.onEdit?.();
+                })
 
-            Button(getString($r('app.string.button_delete')))
-              .layoutWeight(1)
-              .height(42)
-              .fontSize(TYPOGRAPHY.body_sm.size)
-              .fontColor($r('app.color.danger'))
-              .backgroundColor($r('app.color.danger_bg'))
-              .borderRadius(RADIUS.md)
-              .hoverEffect(HoverEffect.Highlight)
-              .onClick(() => {
-                this.onDelete?.();
-              })
+              Button(getString($r('app.string.button_delete')))
+                .layoutWeight(1)
+                .height(48)
+                .fontSize(TYPOGRAPHY.body_sm.size)
+                .fontColor($r('app.color.danger'))
+                .backgroundColor($r('app.color.danger_bg'))
+                .borderRadius(RADIUS.md)
+                .hoverEffect(HoverEffect.Highlight)
+                .onClick(() => {
+                  this.onDelete?.();
+                })
+            }
+            .width('100%')
           }
-          .width('100%')
 
           // Traffic
           if (this.runtime && (this.runtime.rxBytes > 0 || this.runtime.txBytes > 0)) {
-            SectionCard({ title: getString($r('app.string.section_traffic')) }) {
+            SectionCard({
+              title: getString($r('app.string.section_traffic')),
+              cardPadding: this.compact ? SPACING.sm : SPACING.md
+            }) {
               Column() {
                 TrafficChart({
                   rxSpeed: this.runtime.rxSpeed || 0,
@@ -250,7 +304,10 @@ export struct TunnelDetailPanel {
           }
 
           // Route Info
-          SectionCard({ title: getString($r('app.string.section_route_info')) }) {
+          SectionCard({
+            title: getString($r('app.string.section_route_info')),
+            cardPadding: this.compact ? SPACING.sm : SPACING.md
+          }) {
             Column({ space: SPACING.xs }) {
               Row() {
                 Text(getString($r('app.string.field_route_mode')))
@@ -266,18 +323,42 @@ export struct TunnelDetailPanel {
               }
               .width('100%')
 
-              Row() {
-                Text(getString($r('app.string.field_allowed_ips')))
-                  .fontSize(TYPOGRAPHY.body_sm.size)
-                  .fontColor($r('app.color.text_secondary'))
-                  .width('35%')
+              Column({ space: SPACING.xs }) {
+                Row() {
+                  Text(getString($r('app.string.field_allowed_ips')))
+                    .fontSize(TYPOGRAPHY.body_sm.size)
+                    .fontColor($r('app.color.text_secondary'))
+                    .layoutWeight(1)
+
+                  Button(this.isAllowedIpsExpanded
+                    ? getString($r('app.string.button_collapse'))
+                    : getString($r('app.string.button_expand')))
+                    .height(48)
+                    .fontSize(TYPOGRAPHY.body_sm.size)
+                    .fontColor($r('app.color.primary'))
+                    .backgroundColor(Color.Transparent)
+                    .padding({ left: SPACING.sm, right: SPACING.sm })
+                    .onClick(() => {
+                      this.isAllowedIpsExpanded = !this.isAllowedIpsExpanded;
+                    })
+
+                  Button(getString($r('app.string.button_copy')))
+                    .height(48)
+                    .fontSize(TYPOGRAPHY.body_sm.size)
+                    .fontColor($r('app.color.primary'))
+                    .backgroundColor(Color.Transparent)
+                    .padding({ left: SPACING.sm, right: SPACING.sm })
+                    .onClick(() => {
+                      this.copyAllowedIps();
+                    })
+                }
+                .width('100%')
 
                 Text(this.config.allowedIPs)
                   .fontSize(TYPOGRAPHY.body_sm.size)
                   .fontColor($r('app.color.text_primary'))
-                  .layoutWeight(1)
-                  .textAlign(TextAlign.End)
-                  .maxLines(2)
+                  .width('100%')
+                  .maxLines(this.isAllowedIpsExpanded ? 20 : 2)
                   .textOverflow({ overflow: TextOverflow.Ellipsis })
               }
               .width('100%')
@@ -288,7 +369,7 @@ export struct TunnelDetailPanel {
                   .fontColor($r('app.color.text_secondary'))
                   .width('35%')
 
-                Text(this.config.dns || 'Auto')
+                Text(this.config.dns || getString($r('app.string.label_auto')))
                   .fontSize(TYPOGRAPHY.body_sm.size)
                   .fontColor($r('app.color.text_primary'))
                   .layoutWeight(1)
@@ -302,7 +383,7 @@ export struct TunnelDetailPanel {
                   .fontColor($r('app.color.text_secondary'))
                   .width('35%')
 
-                Text(this.config.mtu > 0 ? String(this.config.mtu) : 'Auto')
+                Text(this.config.mtu > 0 ? String(this.config.mtu) : getString($r('app.string.label_auto')))
                   .fontSize(TYPOGRAPHY.body_sm.size)
                   .fontColor($r('app.color.text_primary'))
                   .layoutWeight(1)
@@ -314,9 +395,10 @@ export struct TunnelDetailPanel {
           }
 
           // Diagnostics
-          SectionCard({ title: getString($r('app.string.section_diagnostics')) }) {
+          SectionCard({ cardPadding: this.compact ? SPACING.sm : SPACING.md }) {
             DiagnosticChecklist({
               items: this.diagnostics,
+              isRunning: this.isDiagnosing,
               onRunAgain: () => {
                 this.runDiagnostics();
               }
@@ -324,21 +406,28 @@ export struct TunnelDetailPanel {
           }
 
           // Logs
-          SectionCard({ title: getString($r('app.string.section_logs')) }) {
+          SectionCard({
+            title: getString($r('app.string.section_logs')),
+            cardPadding: this.compact ? SPACING.sm : SPACING.md
+          }) {
             RuntimeLogList({ logs: this.logs })
           }
 
           ExportReportButton({
             onExport: () => {
-              const report = this.config ? logService.exportReport(this.config.id) : logService.exportReport();
-              console.info('Diagnostic report exported');
+              return this.config ? logService.exportReport(this.config.id) : logService.exportReport();
             }
           })
         }
       }
       .width('100%')
       .constraintSize({ maxWidth: this.contentMaxWidth > 0 ? this.contentMaxWidth : 100000 })
-      .padding({ left: SPACING.md, right: SPACING.md, top: SPACING.md, bottom: SPACING.xl })
+      .padding({
+        left: this.compact ? SPACING.sm : SPACING.md,
+        right: this.compact ? SPACING.sm : SPACING.md,
+        top: this.compact ? SPACING.sm : SPACING.md,
+        bottom: SPACING.xl
+      })
       }
       .width('100%')
       .alignItems(HorizontalAlign.Center)

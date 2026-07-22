@@ -262,7 +262,7 @@ WireGuard Client
 | `surface_subtle` | `#F7F9FA` | 输入框、弱背景 |
 | `text_primary` | `#E6000000` | 主文本 |
 | `text_secondary` | `#99000000` | 次要文本 |
-| `text_tertiary` | `#66000000` | 辅助文本 |
+| `text_tertiary` | `#8A000000` | 辅助文本（提高小字号对比度） |
 | `divider` | `#1F000000` | 分割线 |
 
 #### 深色模式
@@ -274,7 +274,7 @@ WireGuard Client
 | `surface_subtle` | `#252525` | 输入框、弱背景 |
 | `text_primary` | `#E6FFFFFF` | 主文本 |
 | `text_secondary` | `#99FFFFFF` | 次要文本 |
-| `text_tertiary` | `#66FFFFFF` | 辅助文本 |
+| `text_tertiary` | `#8AFFFFFF` | 辅助文本（提高小字号对比度） |
 | `divider` | `#1FFFFFFF` | 分割线 |
 
 #### 状态背景
@@ -1283,7 +1283,7 @@ entry/src/main/resources/
     { "name": "surface_subtle", "value": "#F7F9FA" },
     { "name": "text_primary", "value": "#E6000000" },
     { "name": "text_secondary", "value": "#99000000" },
-    { "name": "text_tertiary", "value": "#66000000" },
+    { "name": "text_tertiary", "value": "#8A000000" },
     { "name": "divider", "value": "#1F000000" },
     { "name": "success_bg", "value": "#E8F8F3" },
     { "name": "warning_bg", "value": "#FFF3E0" },
@@ -1303,7 +1303,7 @@ entry/src/main/resources/
     { "name": "surface_subtle", "value": "#252525" },
     { "name": "text_primary", "value": "#E6FFFFFF" },
     { "name": "text_secondary", "value": "#99FFFFFF" },
-    { "name": "text_tertiary", "value": "#66FFFFFF" },
+    { "name": "text_tertiary", "value": "#8AFFFFFF" },
     { "name": "divider", "value": "#1FFFFFFF" },
     { "name": "success_bg", "value": "#123D32" },
     { "name": "warning_bg", "value": "#3A2A10" },

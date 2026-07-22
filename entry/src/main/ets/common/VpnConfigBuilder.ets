@@ -1,5 +1,6 @@
 import { vpnExtension } from '@kit.NetworkKit';
 import type { WgConfig } from '../model/WgConfig';
+import { buildVpnRoutePlan, PlannedIpv4Route } from './VpnRoutePlan';
 
 export class EndpointInfo {
   serverIp: string;
@@ -35,48 +36,31 @@ function parseLinkAddress(addr: string): vpnExtension.LinkAddress {
   };
 }
 
-// 把一条 CIDR（如 "0.0.0.0/0" / "10.0.0.0/24"）转成 VPN RouteInfo。
-// 仅处理 IPv4（isIPv6Accepted=false）；IPv6 返回 null 由调用方跳过。
+// 把执行计划中的有效 IPv4 路由转成 VPN RouteInfo。
 // 关键：protect() 已把 WireGuard 的 UDP socket 绑定到底层物理网卡，
 // 所以即便这里下发 0.0.0.0/0 默认路由，握手/数据 UDP 包也不会回环进 TUN。
-function parseRoute(cidr: string): vpnExtension.RouteInfo | null {
-  const slash = cidr.indexOf('/');
-  const ip = slash >= 0 ? cidr.substring(0, slash) : cidr;
-  if (ip.includes(':')) {
-    return null;
-  }
-  const prefix = slash >= 0 ? parseInt(cidr.substring(slash + 1)) : 32;
+function toRouteInfo(route: PlannedIpv4Route): vpnExtension.RouteInfo {
   return {
     // 必须与系统真实创建的 TUN 网卡名一致（HarmonyOS 固定为 'vpn-tun'）。
     // 之前写 'wgtun0'（不存在的名字）导致 NetworkAddRoute 静默失败，
     // AllowedIPs 路由压根没装上，App 流量走物理网卡进不了隧道，内网不通。
     interface: 'vpn-tun',
     destination: {
-      address: { address: ip, family: 1 },
-      prefixLength: prefix
+      address: { address: route.address, family: 1 },
+      prefixLength: route.prefixLength
     },
     gateway: { address: '0.0.0.0', family: 1 },
     hasGateway: false,
-    isDefaultRoute: prefix === 0
+    isDefaultRoute: route.prefixLength === 0
   };
 }
 
-// 依据 AllowedIPs 构造路由表。空则回退到全隧道 0.0.0.0/0。
+// 依据同一份执行计划构造路由表；只有 AllowedIPs 为空时计划才会生成 IPv4 默认回退。
 function buildRoutes(allowedIPs: string): vpnExtension.RouteInfo[] {
+  const plan = buildVpnRoutePlan(allowedIPs);
   const routes: vpnExtension.RouteInfo[] = [];
-  const parts = (allowedIPs || '')
-    .split(',').map(s => s.trim()).filter(s => s.length > 0);
-  for (const cidr of parts) {
-    const route = parseRoute(cidr);
-    if (route) {
-      routes.push(route);
-    }
-  }
-  if (routes.length === 0) {
-    const fallback = parseRoute('0.0.0.0/0');
-    if (fallback) {
-      routes.push(fallback);
-    }
+  for (const plannedRoute of plan.acceptedIpv4Routes) {
+    routes.push(toRouteInfo(plannedRoute));
   }
   return routes;
 }

@@ -6,7 +6,7 @@
     { "name": "glass_bar", "value": "#CC1E1E1E" },
     { "name": "text_primary", "value": "#E6FFFFFF" },
     { "name": "text_secondary", "value": "#99FFFFFF" },
-    { "name": "text_tertiary", "value": "#66FFFFFF" },
+    { "name": "text_tertiary", "value": "#8AFFFFFF" },
     { "name": "divider", "value": "#1FFFFFFF" },
     { "name": "success_bg", "value": "#123D32" },
     { "name": "warning_bg", "value": "#3A2A10" },

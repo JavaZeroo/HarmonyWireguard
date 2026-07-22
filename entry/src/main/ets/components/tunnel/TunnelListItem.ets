@@ -9,6 +9,7 @@ export struct TunnelListItem {
   @Prop config: WgConfig;
   @Prop status: TunnelStatusType = 'disconnected';
   @Prop selected: boolean = false;
+  @Prop compact: boolean = false;
   // 一镜到底共享元素 id（手机端点开详情时非空；平板分栏为空）
   @Prop sharedTag: string = '';
 
@@ -60,69 +61,116 @@ export struct TunnelListItem {
 
   private getKeepaliveLabel(): string {
     if (this.config.persistentKeepalive > 0) {
-      return 'Keepalive ' + this.config.persistentKeepalive + 's';
+      return getString($r('app.string.label_keepalive_seconds'))
+        .replace('%d', String(this.config.persistentKeepalive));
     }
     return '';
   }
 
-  build() {
-    Row({ space: SPACING.md }) {
-      // 状态色图标容器
-      Stack() {
-        SymbolGlyph($r('sys.symbol.wifi'))
-          .fontSize(22)
-          .fontColor([this.getIconColor()])
-          // 状态色切换时图标颜色渐变
-          .animation({ duration: 250, curve: Curve.EaseInOut })
-      }
-      .width(44)
-      .height(44)
-      .backgroundColor(this.getIconBgColor())
-      .borderRadius(RADIUS.md)
-      // 状态色切换时图标底色渐变
-      .animation({ duration: 250, curve: Curve.EaseInOut })
+  private getStatusLabel(): string {
+    switch (this.status) {
+      case 'connected':
+        return getString($r('app.string.status_connected'));
+      case 'connecting':
+        return getString($r('app.string.status_connecting'));
+      case 'failed':
+        return getString($r('app.string.status_failed'));
+      default:
+        return getString($r('app.string.status_disconnected'));
+    }
+  }
 
-      Column() {
-        Row() {
-          Text(this.config.name)
-            .fontSize(TYPOGRAPHY.body_md.size)
-            .fontWeight(FontWeight.Medium)
-            .fontColor($r('app.color.text_primary'))
+  private getAccessibilityText(): string {
+    return getString($r('app.string.accessibility_tunnel_summary'))
+      .replace('%1$s', this.config.name)
+      .replace('%2$s', this.getStatusLabel())
+      .replace('%3$s', this.getRouteLabel());
+  }
+
+  private getToggleAccessibilityText(): string {
+    const resource = this.isLive()
+      ? $r('app.string.accessibility_disconnect_tunnel')
+      : $r('app.string.accessibility_connect_tunnel');
+    return getString(resource).replace('%s', this.config.name);
+  }
+
+  build() {
+    Row({ space: this.compact ? SPACING.sm : SPACING.md }) {
+      Row({ space: this.compact ? SPACING.sm : SPACING.md }) {
+        // 状态色图标容器
+        Stack() {
+          SymbolGlyph($r('sys.symbol.wifi'))
+            .fontSize(22)
+            .fontColor([this.getIconColor()])
+            // 状态色切换时图标颜色渐变
+            .animation({ duration: 250, curve: Curve.EaseInOut })
+        }
+        .width(this.compact ? 40 : 44)
+        .height(this.compact ? 40 : 44)
+        .backgroundColor(this.getIconBgColor())
+        .borderRadius(RADIUS.md)
+        // 状态色切换时图标底色渐变
+        .animation({ duration: 250, curve: Curve.EaseInOut })
+
+        Column() {
+          Row() {
+            Text(this.config.name)
+              .fontSize(TYPOGRAPHY.body_md.size)
+              .fontWeight(FontWeight.Medium)
+              .fontColor($r('app.color.text_primary'))
+              .maxLines(2)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+              .layoutWeight(1)
+
+            StatusBadge({ status: this.status })
+          }
+          .width('100%')
+
+          Text(formatEndpointShort(this.config.endpoint))
+            .fontSize(TYPOGRAPHY.caption.size)
+            .fontColor($r('app.color.text_secondary'))
+            .width('100%')
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .layoutWeight(1)
+            .margin({ top: SPACING.xxs })
 
-          StatusBadge({ status: this.status })
-        }
-        .width('100%')
-
-        Text(formatEndpointShort(this.config.endpoint))
-          .fontSize(TYPOGRAPHY.caption.size)
-          .fontColor($r('app.color.text_secondary'))
-          .width('100%')
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .margin({ top: SPACING.xxs })
-
-        Row() {
-          Text(this.getRouteLabel())
-            .fontSize(TYPOGRAPHY.caption.size)
-            .fontColor($r('app.color.text_tertiary'))
-
-          if (this.getKeepaliveLabel().length > 0) {
-            Text(' · ' + this.getKeepaliveLabel())
+          Row() {
+            Text(this.getRouteLabel())
               .fontSize(TYPOGRAPHY.caption.size)
               .fontColor($r('app.color.text_tertiary'))
+
+            if (this.getKeepaliveLabel().length > 0) {
+              Text(' · ' + this.getKeepaliveLabel())
+                .fontSize(TYPOGRAPHY.caption.size)
+                .fontColor($r('app.color.text_tertiary'))
+            }
           }
+          .width('100%')
+          .margin({ top: SPACING.xxs })
         }
-        .width('100%')
-        .margin({ top: SPACING.xxs })
+        .alignItems(HorizontalAlign.Start)
+        .layoutWeight(1)
       }
-      .alignItems(HorizontalAlign.Start)
       .layoutWeight(1)
+      .constraintSize({ minHeight: 48 })
+      .borderRadius(RADIUS.md)
+      .hoverEffect(HoverEffect.Highlight)
+      .accessibilityRole(AccessibilityRoleType.BUTTON)
+      .accessibilityText(this.getAccessibilityText())
+      .accessibilityDescription(this.selected
+        ? getString($r('app.string.accessibility_selected')) : '')
+      .onClick(() => {
+        this.onSelect?.();
+      })
+      .stateStyles({
+        pressed: {
+          .opacity(0.9)
+        }
+      })
 
       Toggle({ type: ToggleType.Switch, isOn: this.isLive() })
         .selectedColor($r('app.color.primary'))
+        .accessibilityText(this.getToggleAccessibilityText())
         .onChange((isOn: boolean) => {
           // 防抖：仅当开关目标态与当前运行态真正不一致时才触发，
           // 避免重渲染/状态同步导致的伪 onChange 造成“连上又立刻断开”。
@@ -137,12 +185,14 @@ export struct TunnelListItem {
         })
     }
     .width('100%')
-    .padding(SPACING.md)
-    .backgroundColor($r('app.color.surface'))
+    .padding(this.compact ? SPACING.sm : SPACING.md)
+    .backgroundColor(this.selected ? $r('app.color.primary_bg') : $r('app.color.surface'))
     .borderRadius(RADIUS.lg)
     .border(this.isLive()
       ? { width: 1, color: this.getIconColor() }
-      : { width: 1, color: Color.Transparent })
+      : this.selected
+        ? { width: 1, color: $r('app.color.primary') }
+        : { width: 1, color: Color.Transparent })
     // 连接态描边颜色渐显/渐隐，而非突变
     .animation({ duration: 250, curve: Curve.EaseInOut })
     .shadow({
@@ -150,16 +200,6 @@ export struct TunnelListItem {
       color: SHADOW.sm.color,
       offsetX: SHADOW.sm.offsetX,
       offsetY: SHADOW.sm.offsetY
-    })
-    // 悬停用系统高亮反馈（不改布局），避免放大导致卡片被两侧裁切
-    .hoverEffect(HoverEffect.Highlight)
-    .onClick(() => {
-      this.onSelect?.();
-    })
-    .stateStyles({
-      pressed: {
-        .opacity(0.9)
-      }
     })
     // 一镜到底：点开详情时整卡片原地放大展开为全屏详情
     .geometryTransition(this.sharedTag)

@@ -53,7 +53,7 @@ export struct EndpointInput {
         TextInput({ placeholder: getString($r('app.string.placeholder_endpoint_host')), text: this.host })
           .fontSize(TYPOGRAPHY.body_md.size)
           .layoutWeight(3)
-          .height(44)
+          .height(48)
           .backgroundColor($r('app.color.surface_subtle'))
           .borderRadius(RADIUS.md)
           .onChange((val) => {
@@ -65,7 +65,7 @@ export struct EndpointInput {
         TextInput({ placeholder: getString($r('app.string.placeholder_endpoint_port')), text: this.port })
           .fontSize(TYPOGRAPHY.body_md.size)
           .layoutWeight(1)
-          .height(44)
+          .height(48)
           .backgroundColor($r('app.color.surface_subtle'))
           .borderRadius(RADIUS.md)
           .type(InputType.Number)

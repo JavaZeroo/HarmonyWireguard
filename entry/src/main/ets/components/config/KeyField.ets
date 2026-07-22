@@ -1,4 +1,5 @@
 import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
+import { pasteboard } from '@kit.BasicServicesKit';
 
 @Component
 export struct KeyField {
@@ -9,13 +10,21 @@ export struct KeyField {
 
   onChange?: (val: string) => void;
 
-  private copyValue(): void {
+  private async copyValue(): Promise<void> {
+    if (!this.value) {
+      return;
+    }
     try {
+      const board = pasteboard.getSystemPasteboard();
+      const data = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, this.value);
+      await board.setData(data);
       this.getUIContext().getPromptAction().showToast({
         message: getString($r('app.string.hint_copied')),
         duration: 1500
       });
-    } catch {}
+    } catch (e) {
+      console.error('KeyField: failed to copy key');
+    }
   }
 
   build() {
@@ -32,8 +41,10 @@ export struct KeyField {
           TextInput({ placeholder: this.placeholder, text: this.value })
             .fontSize(TYPOGRAPHY.body_md.size)
             .layoutWeight(1)
+            .height(48)
             .backgroundColor('transparent')
             .padding(0)
+            .accessibilityText(this.label)
             .onChange((val) => {
               this.onChange?.(val);
             })
@@ -46,17 +57,21 @@ export struct KeyField {
             .textOverflow({ overflow: TextOverflow.Ellipsis })
         }
 
-        Button('Copy')
-          .fontSize(12)
+        Button(getString($r('app.string.button_copy')))
+          .fontSize(TYPOGRAPHY.body_sm.size)
           .fontColor($r('app.color.primary'))
           .backgroundColor('transparent')
-          .height(32)
+          .height(48)
+          .enabled(this.value.length > 0)
+          .opacity(this.value.length > 0 ? 1 : 0.45)
+          .accessibilityRole(AccessibilityRoleType.BUTTON)
+          .accessibilityText($r('app.string.button_copy'))
           .onClick(() => {
             this.copyValue();
           })
       }
       .width('100%')
-      .height(44)
+      .constraintSize({ minHeight: 48 })
       .padding({ left: SPACING.sm, right: SPACING.sm })
       .backgroundColor($r('app.color.surface_subtle'))
       .borderRadius(RADIUS.md)

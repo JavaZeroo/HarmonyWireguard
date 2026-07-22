@@ -112,6 +112,16 @@ export struct ConnectionHeroCard {
     return this.status === 'disconnected' ? $r('app.color.text_primary') : this.getStatusColor();
   }
 
+  private getPrimaryAccessibilityText(): string {
+    if (this.status === 'connected') {
+      return getString($r('app.string.accessibility_disconnect_tunnel')).replace('%s', this.tunnelName);
+    }
+    if (this.status === 'connecting') {
+      return getString($r('app.string.status_connecting'));
+    }
+    return getString($r('app.string.accessibility_connect_tunnel')).replace('%s', this.tunnelName);
+  }
+
   private getHandshakeText(): string {
     if (this.lastHandshakeAt === undefined || this.lastHandshakeAt < 0) {
       return getString($r('app.string.hint_handshake_never'));
@@ -165,6 +175,8 @@ export struct ConnectionHeroCard {
     // 辉光随状态渐显/渐隐（scale 由 onStatusChange 的显式 animateTo 单独驱动，互不影响）
     .animation({ duration: 350, curve: Curve.EaseInOut })
     .scale({ x: this.emblemScale, y: this.emblemScale })
+    .accessibilityRole(AccessibilityRoleType.BUTTON)
+    .accessibilityText(this.getPrimaryAccessibilityText())
     .onClick(() => {
       this.onPrimaryAction?.();
     })
@@ -241,6 +253,7 @@ export struct ConnectionHeroCard {
       // 主操作按钮
       TunnelActionButton({
         status: this.status,
+        tunnelName: this.tunnelName,
         onPrimaryAction: this.onPrimaryAction
       })
         .margin({ top: SPACING.lg })
@@ -251,7 +264,7 @@ export struct ConnectionHeroCard {
           .fontSize(TYPOGRAPHY.body_sm.size)
           .fontColor($r('app.color.text_secondary'))
           .backgroundColor(Color.Transparent)
-          .height(36)
+          .height(48)
           .margin({ top: SPACING.xs })
           .onClick(() => {
             this.onDetail?.();

@@ -1,5 +1,8 @@
 import type { TunnelRuntimeState, TunnelStatusType, WgStatusPayload } from '../model/WgConfig';
 import { logService } from './LogService';
+import { getString } from '../common/DesignSystem';
+
+// ArkTS module: localized runtime log resources require the .ets side of the ArkTS/TS boundary.
 
 class TunnelRuntimeService {
   private states: Map<string, TunnelRuntimeState> = new Map();
@@ -92,11 +95,11 @@ class TunnelRuntimeService {
     error?: string
   ): void {
     if (status === 'connected' && (!existing || existing.status !== 'connected')) {
-      logService.addLog(tunnelId, 'info', '隧道已连接');
+      logService.addLog(tunnelId, 'info', getString($r('app.string.log_tunnel_connected')));
     } else if (status === 'failed' && (!existing || existing.status !== 'failed')) {
-      logService.addLog(tunnelId, 'error', error || '连接失败');
+      logService.addLog(tunnelId, 'error', error || getString($r('app.string.log_tunnel_failed')));
     } else if (status === 'disconnected' && existing && existing.status === 'connected') {
-      logService.addLog(tunnelId, 'info', '隧道已断开');
+      logService.addLog(tunnelId, 'info', getString($r('app.string.log_tunnel_disconnected')));
     }
   }
 

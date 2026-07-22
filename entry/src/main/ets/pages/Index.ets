@@ -10,34 +10,22 @@ import { ConfigEditPage } from './ConfigEditPage';
 import { ConfigPreviewPage } from './ConfigPreviewPage';
 import { TunnelDetailPage } from './TunnelDetailPage';
 import { APP_CONSTANTS } from '../common/Constants';
-import { SPACING, TYPOGRAPHY, Breakpoint, getBreakpoint, getString } from '../common/DesignSystem';
+import { SPACING, RADIUS, TYPOGRAPHY, Breakpoint, getBreakpoint, getString } from '../common/DesignSystem';
 import { formatBytes } from '../common/Formatters';
 import { shouldApplyToggle, ToggleContext } from '../common/Utils';
 import { ConnectionHeroCard } from '../components/tunnel/ConnectionHeroCard';
 import { TunnelListItem } from '../components/tunnel/TunnelListItem';
 import { EmptyState } from '../components/common/EmptyState';
-import { DiagnosticSummaryCard } from '../components/tunnel/DiagnosticSummaryCard';
-import type { DiagnosticItem } from '../model/WgConfig';
 import { tunnelRuntimeService } from '../service/TunnelRuntimeService';
 import { TunnelDetailPanel } from '../components/tunnel/TunnelDetailPanel';
 import { ImportActions } from '../service/ImportActions';
 import { DialogHelper } from '../common/DialogHelper';
+import { PageHeader } from '../components/app/PageHeader';
+import { PasteConfigPage } from './PasteConfigPage';
+import { settingsService } from '../service/SettingsService';
 
 const TAG = 'IndexPage';
-
-// Navigation 目的地路由表（顶层 @Builder，navDestination 要求函数引用，不能内联 lambda）
-@Builder
-function PageMap(name: string, param: Object) {
-  if (name === 'About') {
-    NavDestination() { AboutPage() }.hideTitleBar(true)
-  } else if (name === 'ConfigEdit') {
-    NavDestination() { ConfigEditPage({ navParam: param }) }.hideTitleBar(true)
-  } else if (name === 'ConfigPreview') {
-    NavDestination() { ConfigPreviewPage({ navParam: param }) }.hideTitleBar(true)
-  } else if (name === 'TunnelDetail') {
-    NavDestination() { TunnelDetailPage({ navConfigId: param as string }) }.hideTitleBar(true)
-  }
-}
+const ACTIVE_RESTORE_TIMEOUT_MS = 15000;
 
 function createWant(config: WgConfig): Want {
   return {
@@ -61,7 +49,9 @@ function createStopWant(): Want {
 @Entry
 @Component
 struct Index {
-  @Provide('pageStack') pageStack: NavPathStack = new NavPathStack();
+  // NavPathStack 是可变导航控制器，不应被声明为 ArkUI 响应式状态。
+  // API 26 会在 Navigation 初始化栈时检测到 @Provide 变更，并报 build 期间修改状态。
+  private readonly pageStack: NavPathStack = new NavPathStack();
   @State configs: WgConfig[] = [];
   @State activeConfigId: string = '';
   @State activeStatus: TunnelStatusType = 'disconnected';
@@ -70,11 +60,11 @@ struct Index {
   @State txBytes: number = 0;
   @State lastHandshakeAt: number = -1;
   @State selectedConfigId: string = '';
-  @State diagnostics: DiagnosticItem[] = [];
   @State breakpoint: Breakpoint = Breakpoint.COMPACT;
   @State windowWidth: number = 360;
   @State currentTabIndex: number = 0;
   @State miniExpanded: boolean = false;
+  @State compactMode: boolean = false;
   // 手机端隧道详情：改用 bindContentCover 全屏展开（一镜到底），不走 Navigation push
   @State detailCoverShow: boolean = false;
   @State detailCoverId: string = '';
@@ -83,11 +73,17 @@ struct Index {
 
   private unsubscribe?: () => void;
   private statusSubscriber: commonEventManager.CommonEventSubscriber | null = null;
+  private isStatusSubscriberPending: boolean = false;
+  private isPageActive: boolean = false;
   private lastConnLogged: number = -1;
+  private restoreValidationTimer: number = -1;
 
   aboutToAppear(): void {
+    this.isPageActive = true;
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
     configManager.init(ctx);
+    settingsService.init(ctx);
+    this.compactMode = settingsService.getBool('compactMode');
     this.loadConfigs();
     this.updateBreakpoint();
 
@@ -118,30 +114,39 @@ struct Index {
   }
 
   aboutToDisappear(): void {
+    this.isPageActive = false;
     if (this.unsubscribe) {
       this.unsubscribe();
+      this.unsubscribe = undefined;
     }
     this.teardownStatusSubscriber();
+    this.cancelRestoreValidation();
   }
 
   // 订阅扩展子进程回传的实时状态/流量事件，喂给 TunnelRuntimeService
   private setupStatusSubscriber(): void {
-    if (this.statusSubscriber) {
+    if (this.statusSubscriber || this.isStatusSubscriberPending) {
       return;
     }
+    this.isStatusSubscriberPending = true;
     const info: commonEventManager.CommonEventSubscribeInfo = {
       events: [APP_CONSTANTS.VPN_STATUS_EVENT]
     };
     commonEventManager.createSubscriber(info,
       (err: BusinessError, subscriber: commonEventManager.CommonEventSubscriber) => {
+        this.isStatusSubscriberPending = false;
         if (err) {
           hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'createSubscriber failed: %{public}d', err.code);
+          return;
+        }
+        // createSubscriber 是异步的；页面销毁后迟到的回调不能再注册事件。
+        if (!this.isPageActive) {
           return;
         }
         this.statusSubscriber = subscriber;
         commonEventManager.subscribe(subscriber,
           (subErr: BusinessError, data: commonEventManager.CommonEventData) => {
-            if (subErr) {
+            if (subErr || !this.isPageActive) {
               return;
             }
             this.onStatusEvent(data);
@@ -172,6 +177,32 @@ struct Index {
     } catch (e) {
       return;
     }
+    if (this.activeConfigId === configId) {
+      this.cancelRestoreValidation();
+    }
+    const isActiveEvent = payload.state !== 'disconnected';
+    if (!this.activeConfigId && isActiveEvent) {
+      const config = this.configs.find(item => item.id === configId);
+      if (config) {
+        this.activeConfigId = configId;
+        if (payload.state !== 'failed') {
+          configManager.setActiveConfigId(configId);
+        }
+      }
+    }
+
+    if (payload.state === 'disconnected') {
+      configManager.clearActiveConfigId(configId);
+      if (this.activeConfigId === configId || this.connectingId === configId) {
+        this.clearActiveUiState();
+      }
+    } else if (payload.state === 'failed') {
+      // 扩展启动流程失败同样不能留下可被下次启动误恢复的配置 id。
+      configManager.clearActiveConfigId(configId);
+      if (this.connectingId === configId) {
+        this.connectingId = '';
+      }
+    }
     // 只在连接态翻转时打点，避免每 1.5s 刷屏
     const connFlag: number = payload.connected ? 1 : 0;
     if (connFlag !== this.lastConnLogged) {
@@ -199,6 +230,69 @@ struct Index {
 
   loadConfigs(): void {
     this.configs = configManager.getAllConfigs();
+    this.restoreActiveConfig();
+  }
+
+  private restoreActiveConfig(): void {
+    const persistedId = configManager.getActiveConfigId();
+    if (!persistedId) {
+      if (this.activeConfigId) {
+        this.clearActiveUiState();
+      }
+      return;
+    }
+
+    const config = this.configs.find(item => item.id === persistedId);
+    if (!config) {
+      configManager.clearActiveConfigId(persistedId);
+      tunnelRuntimeService.resetState(persistedId);
+      this.clearActiveUiState();
+      return;
+    }
+
+    this.activeConfigId = persistedId;
+    const state = tunnelRuntimeService.getState(persistedId);
+    this.activeStatus = state?.status ?? 'connecting';
+    this.rxBytes = state?.rxBytes ?? 0;
+    this.txBytes = state?.txBytes ?? 0;
+    this.lastHandshakeAt = state?.lastHandshakeAt ?? -1;
+    this.scheduleRestoreValidation(persistedId);
+  }
+
+  private scheduleRestoreValidation(configId: string): void {
+    this.cancelRestoreValidation();
+    this.restoreValidationTimer = setTimeout(() => {
+      this.restoreValidationTimer = -1;
+      if (!this.isPageActive || this.activeConfigId !== configId) {
+        return;
+      }
+      const state = tunnelRuntimeService.getState(configId);
+      const hasRecentHeartbeat = state !== undefined &&
+        Date.now() - state.updatedAt <= ACTIVE_RESTORE_TIMEOUT_MS;
+      if (!hasRecentHeartbeat) {
+        configManager.clearActiveConfigId(configId);
+        tunnelRuntimeService.resetState(configId);
+        this.clearActiveUiState();
+      }
+    }, ACTIVE_RESTORE_TIMEOUT_MS);
+  }
+
+  private cancelRestoreValidation(): void {
+    if (this.restoreValidationTimer !== -1) {
+      clearTimeout(this.restoreValidationTimer);
+      this.restoreValidationTimer = -1;
+    }
+  }
+
+  private clearActiveUiState(): void {
+    this.cancelRestoreValidation();
+    this.activeConfigId = '';
+    this.connectingId = '';
+    this.activeStatus = 'disconnected';
+    this.rxBytes = 0;
+    this.txBytes = 0;
+    this.lastHandshakeAt = -1;
+    this.miniExpanded = false;
   }
 
   getActiveConfig(): WgConfig | undefined {
@@ -211,7 +305,7 @@ struct Index {
     return this.configs.find(c => c.id === this.selectedConfigId);
   }
 
-  async toggleVpn(config: WgConfig, enable: boolean): Promise<void> {
+  async toggleVpn(config: WgConfig, enable: boolean): Promise<boolean> {
     hilog.info(APP_CONSTANTS.DOMAIN, TAG,
       '>>> toggleVpn[v3] config=%{public}s enable=%{public}s',
       config.name, String(enable));
@@ -222,77 +316,136 @@ struct Index {
       connectingId: this.connectingId,
       activeStatus: this.activeStatus
     };
+    if (enable && this.activeConfigId !== '' && this.activeConfigId !== config.id &&
+      (this.activeStatus === 'connected' || this.activeStatus === 'connecting')) {
+      this.showToast(getString($r('app.string.error_disconnect_before_switch')));
+      // Toggle has its own pressed animation. Rebind the list immediately so
+      // a rejected switch cannot remain visually enabled.
+      this.configs = this.configs.slice();
+      return false;
+    }
     if (!shouldApplyToggle(config.id, enable, toggleCtx)) {
       hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'toggleVpn ignored (guard): enable=%{public}s', String(enable));
-      return;
+      return false;
     }
     if (enable) {
       this.connectingId = config.id;
+      this.activeConfigId = config.id;
       this.activeStatus = 'connecting';
+      let started = false;
       try {
         // 系统 VPN 授权对话框会丢掉 want.parameters，所以把要用的配置 id 写到 prefs
-        configManager.setActiveConfigId(config.id);
+        if (!configManager.setActiveConfigId(config.id)) {
+          throw new Error('Failed to persist active config');
+        }
+        tunnelRuntimeService.setStatus(config.id, 'connecting');
         const want = createWant(config);
         hilog.info(APP_CONSTANTS.DOMAIN, TAG,
           'startVpnExtensionAbility: bundle=%{public}s module=%{public}s ability=%{public}s configId=%{public}s',
           want.bundleName ?? '', want.moduleName ?? '', want.abilityName ?? '', config.id);
         await vpnExtension.startVpnExtensionAbility(want);
-        this.activeConfigId = config.id;
-        // 只代表"扩展已拉起"，真正的 connected 由扩展握手成功后经事件回传
-        this.activeStatus = 'connecting';
-        tunnelRuntimeService.setStatus(config.id, 'connecting');
+        // The UI already entered connecting before the await. Do not assign it
+        // again here: a fast failure event may have arrived while awaiting.
         hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'VPN extension started for %{public}s', config.name);
+        started = true;
+        this.scheduleRestoreValidation(config.id);
       } catch (err) {
         const e = err as BusinessError;
         const code = e?.code !== undefined ? String(e.code) : '?';
         const msg = e?.message ?? String(err);
         this.activeStatus = 'failed';
         tunnelRuntimeService.setStatus(config.id, 'failed', msg);
+        configManager.clearActiveConfigId(config.id);
         hilog.error(APP_CONSTANTS.DOMAIN, TAG,
           'Failed to start VPN: code=%{public}s msg=%{public}s', code, msg);
       }
       this.connectingId = '';
+      return started;
     } else {
       try {
         await vpnExtension.stopVpnExtensionAbility(createStopWant());
         this.activeStatus = 'disconnected';
         tunnelRuntimeService.setStatus(config.id, 'disconnected');
+        configManager.clearActiveConfigId(config.id);
         if (this.activeConfigId === config.id) {
-          this.activeConfigId = '';
-          this.rxBytes = 0;
-          this.txBytes = 0;
-          this.lastHandshakeAt = -1;
+          this.clearActiveUiState();
         }
         hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'VPN stopped');
+        return true;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'Failed to stop VPN: %{public}s', msg);
+        this.showToast(getString($r('app.string.error_stop_vpn')));
+        return false;
       }
+    }
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
+    } catch {}
+  }
+
+  // 成员 Builder 可安全捕获非响应式 pageStack，并显式传给目的页。
+  @Builder
+  PageMap(name: string, param: Object) {
+    if (name === 'About') {
+      NavDestination() { AboutPage({ pageStack: this.pageStack }) }.hideTitleBar(true)
+    } else if (name === 'ConfigEdit') {
+      NavDestination() {
+        ConfigEditPage({ navParam: param, pageStack: this.pageStack })
+      }.hideTitleBar(true)
+    } else if (name === 'ConfigPreview') {
+      NavDestination() {
+        ConfigPreviewPage({ navParam: param, pageStack: this.pageStack })
+      }.hideTitleBar(true)
+    } else if (name === 'TunnelDetail') {
+      NavDestination() {
+        TunnelDetailPage({ navConfigId: param as string, pageStack: this.pageStack })
+      }.hideTitleBar(true)
+    } else if (name === 'PasteConfig') {
+      NavDestination() { PasteConfigPage({ pageStack: this.pageStack }) }.hideTitleBar(true)
     }
   }
 
   @Builder
   EmptyActionBuilder() {
     Column({ space: SPACING.sm }) {
-      Button(getString($r('app.string.button_scan_qr')))
-        .width('60%')
-        .height(44)
-        .onClick(() => {
-          ImportActions.scanQR(this.getUIContext(), this.pageStack);
-        })
+      if (ImportActions.isQrScanSupported()) {
+        Button(getString($r('app.string.button_scan_qr')))
+          .width('72%')
+          .constraintSize({ maxWidth: 320 })
+          .height(48)
+          .onClick(() => {
+            ImportActions.scanQR(this.getUIContext(), this.pageStack);
+          })
+      }
 
       Button(getString($r('app.string.button_import_file')))
-        .width('60%')
-        .height(44)
+        .width('72%')
+        .constraintSize({ maxWidth: 320 })
+        .height(48)
         .backgroundColor($r('app.color.surface_subtle'))
         .fontColor($r('app.color.primary'))
         .onClick(() => {
           ImportActions.fromFile(this.getUIContext(), this.pageStack);
         })
 
+      Button(getString($r('app.string.button_import_clipboard')))
+        .width('72%')
+        .constraintSize({ maxWidth: 320 })
+        .height(48)
+        .backgroundColor($r('app.color.surface_subtle'))
+        .fontColor($r('app.color.primary'))
+        .onClick(() => {
+          ImportActions.pasteConfig(this.pageStack);
+        })
+
       Button(getString($r('app.string.button_create_manual')))
-        .width('60%')
-        .height(44)
+        .width('72%')
+        .constraintSize({ maxWidth: 320 })
+        .height(48)
         .backgroundColor($r('app.color.surface_subtle'))
         .fontColor($r('app.color.primary'))
         .onClick(() => {
@@ -306,24 +459,28 @@ struct Index {
   private importMenuItems(): MenuElement[] {
     const ctx = this.getUIContext();
     const stack = this.pageStack;
-    return [
-      {
+    const items: MenuElement[] = [];
+    if (ImportActions.isQrScanSupported()) {
+      items.push({
         value: getString($r('app.string.button_scan_qr')),
         action: () => { ImportActions.scanQR(ctx, stack); }
-      },
+      });
+    }
+    items.push(
       {
         value: getString($r('app.string.button_import_file')),
         action: () => { ImportActions.fromFile(ctx, stack); }
       },
       {
         value: getString($r('app.string.button_import_clipboard')),
-        action: () => { ImportActions.fromClipboard(ctx, stack); }
+        action: () => { ImportActions.pasteConfig(stack); }
       },
       {
         value: getString($r('app.string.button_create_manual')),
         action: () => { ImportActions.manualCreate(stack); }
       }
-    ];
+    );
+    return items;
   }
 
   private statusColorRes(): ResourceColor {
@@ -395,8 +552,9 @@ struct Index {
       lastHandshakeAt: this.lastHandshakeAt,
       rxBytes: this.rxBytes,
       txBytes: this.txBytes,
+      latestError: tunnelRuntimeService.getState(this.activeConfigId)?.latestError ?? '',
       onPrimaryAction: () => {
-        if (this.activeStatus === 'connected') {
+        if (this.activeStatus === 'connected' || this.activeStatus === 'connecting') {
           const cfg = this.getActiveConfig();
           if (cfg) this.toggleVpn(cfg, false);
         } else if (this.activeStatus === 'disconnected' || this.activeStatus === 'failed') {
@@ -419,34 +577,34 @@ struct Index {
   @Builder
   ConfigListContent(containerWidth: number) {
     if (this.configs.length === 0) {
-      Column() {
-        EmptyState({
-          icon: 'wifi_slash',
-          title: getString($r('app.string.empty_config_title')),
-          description: getString($r('app.string.empty_config_desc'))
-        }) {
-          this.EmptyActionBuilder()
+      Scroll() {
+        Column() {
+          EmptyState({
+            icon: 'wifi_slash',
+            title: getString($r('app.string.empty_config_title')),
+            description: getString($r('app.string.empty_config_desc'))
+          }) {
+            this.EmptyActionBuilder()
+          }
         }
+        .width('100%')
+        .constraintSize({ minHeight: '100%' })
+        .justifyContent(FlexAlign.Center)
+        .padding({ left: SPACING.lg, right: SPACING.lg, top: 52, bottom: 112 })
       }
       .width('100%')
       .height('100%')
-      .justifyContent(FlexAlign.Center)
-      .padding({ left: SPACING.lg, right: SPACING.lg, top: this.isCompactUX() ? 52 : 0 })
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.Spring)
     } else {
-      List({ space: SPACING.md }) {
+      List({ space: this.compactMode ? SPACING.sm : SPACING.md }) {
         ListItem() {
           Row().width('100%').height(this.topContentClearance())
         }
 
-        if (this.activeConfigId) {
+        if (this.activeConfigId && this.isCompactUX()) {
           ListItem() {
             this.HeroListItem()
-          }
-        }
-
-        if (this.diagnostics.length > 0) {
-          ListItem() {
-            DiagnosticSummaryCard({ items: this.diagnostics })
           }
         }
 
@@ -463,7 +621,8 @@ struct Index {
               TunnelListItem({
                 config: config,
                 status: config.id === this.activeConfigId ? this.activeStatus : 'disconnected',
-                selected: config.id === this.selectedConfigId || config.id === this.activeConfigId,
+                selected: !this.isCompactUX() && config.id === this.expandedDetailId(),
+                compact: this.compactMode,
                 sharedTag: this.isCompactUX() ? ('detail_' + config.id) : '',
                 onSelect: () => {
                   this.openDetail(config.id);
@@ -512,6 +671,93 @@ struct Index {
   }
 
   @Builder
+  ExpandedAddButton() {
+    Button() {
+      Text('+')
+        .fontSize(24)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(Color.White)
+        .rotate({ angle: this.fabMenuOpen ? 45 : 0 })
+        .animation({ duration: 200, curve: Curve.FastOutSlowIn })
+    }
+    .width(44)
+    .height(44)
+    .backgroundColor($r('app.color.primary'))
+    .borderRadius(RADIUS.full)
+    .shadow({ radius: 6, color: 'rgba(0,125,255,0.22)', offsetY: 3 })
+    .hoverEffect(HoverEffect.Highlight)
+    .accessibilityText($r('app.string.accessibility_add_config'))
+    .bindMenu(this.importMenuItems(), {
+      onAppear: () => {
+        this.fabMenuOpen = true;
+      },
+      onDisappear: () => {
+        this.fabMenuOpen = false;
+      }
+    })
+  }
+
+  // 横屏标题收进内容画布，不再用贯穿整窗的玻璃长条。
+  @Builder
+  ExpandedHeader() {
+    Row({ space: SPACING.md }) {
+      Stack() {
+        SymbolGlyph($r('sys.symbol.wifi'))
+          .fontSize(24)
+          .fontColor([$r('app.color.primary')])
+      }
+      .width(44)
+      .height(44)
+      .backgroundColor($r('app.color.primary_bg'))
+      .borderRadius(RADIUS.md)
+
+      Column({ space: SPACING.xxs }) {
+        Text(getString($r('app.string.page_home')))
+          .fontSize(TYPOGRAPHY.title_sm.size)
+          .fontWeight(FontWeight.Bold)
+          .fontColor($r('app.color.text_primary'))
+
+        Row({ space: SPACING.xs }) {
+          Text(getString($r('app.string.section_configs')))
+            .fontSize(TYPOGRAPHY.caption.size)
+            .fontColor($r('app.color.text_secondary'))
+          Text(this.configs.length.toString())
+            .fontSize(TYPOGRAPHY.caption.size)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.primary'))
+        }
+      }
+      .alignItems(HorizontalAlign.Start)
+
+      Blank()
+
+      if (this.activeConfigId !== '') {
+        Row({ space: SPACING.xs }) {
+          Circle()
+            .width(8)
+            .height(8)
+            .fill(this.statusColorRes())
+          Text(this.statusTextLabel())
+            .fontSize(TYPOGRAPHY.body_sm.size)
+            .fontWeight(FontWeight.Medium)
+            .fontColor(this.statusColorRes())
+        }
+        .padding({ left: SPACING.sm, right: SPACING.sm, top: 6, bottom: 6 })
+        .backgroundColor($r('app.color.surface_subtle'))
+        .borderRadius(RADIUS.full)
+      }
+
+      this.ExpandedAddButton()
+    }
+    .width('100%')
+    .constraintSize({ minHeight: 68 })
+    .padding({ left: SPACING.md, right: 12, top: 10, bottom: 10 })
+    .backgroundColor($r('app.color.surface'))
+    .borderRadius(RADIUS.xl)
+    .shadow({ radius: 6, color: 'rgba(0,0,0,0.06)', offsetY: 2 })
+  }
+
+  @Builder
   Fab() {
     Button() {
       Text('+')
@@ -526,8 +772,14 @@ struct Index {
     .backgroundColor($r('app.color.primary'))
     .borderRadius(28)
     .shadow({ radius: 8, color: 'rgba(0,0,0,0.20)', offsetY: 4 })
+    .accessibilityText($r('app.string.accessibility_add_config'))
     // 上抬避开底部悬浮 Dock（Tab 胶囊 / 连接中 MiniBar，展开时更高）
-    .margin({ right: SPACING.md, bottom: this.isCompactUX() ? (this.activeConfigId !== '' ? (this.miniExpanded ? 264 : 160) : 72) : SPACING.lg })
+    .margin({
+      right: SPACING.md,
+      bottom: this.isCompactUX()
+        ? (this.activeConfigId !== '' ? (this.miniExpanded ? 264 : 160) : 72)
+        : SPACING.lg
+    })
     .hoverEffect(HoverEffect.Highlight)
     .bindMenu(this.importMenuItems(), {
       onAppear: () => {
@@ -576,87 +828,97 @@ struct Index {
     .backgroundColor($r('app.color.background'))
   }
 
-  // 单栏 UX：< lg(840vp) 一律单栏 + 全屏详情 Cover + 底部悬浮导航；仅 lg(≥840) 才左右分栏。
-  // 这样手机横屏 / 平板竖屏（md 600–840）不会出现两栏都局促的分栏，符合“lg 才双栏”的通行阈值。
+  // 单栏 UX：< 960vp 一律单栏 + 全屏详情 Cover；≥960vp 才启用侧栏与主从分栏。
+  // 这样手机横屏 / 平板竖屏不会被 104vp 导航栏与 360vp 主栏挤压详情内容。
   private isCompactUX(): boolean {
     return this.breakpoint !== Breakpoint.EXPANDED;
   }
 
   // 分栏主栏宽度（仅 lg 调用）：超大屏（≥1440vp）更宽（占比思想）。
   private masterWidth(): number {
-    return this.windowWidth >= 1440 ? 400 : 360;
+    if (this.windowWidth >= 1600) {
+      return 384;
+    }
+    if (this.windowWidth >= 1200) {
+      return 352;
+    }
+    return 328;
   }
 
   // 单栏内容限宽居中（缩进布局）：容器够宽时用左右内边距把列表夹到 ~640 居中，
-  // 避免 md(600–840) 单栏时卡片被拉得过宽；窄容器（如分栏主栏 360）退回常规页边距。
+  // 避免 md(600–960) 单栏时卡片被拉得过宽；窄容器（如分栏主栏 360）退回常规页边距。
   private listSidePadding(containerWidth: number): number {
-    const maxContent = 640;
+    const maxContent = 520;
     if (containerWidth > maxContent + 2 * SPACING.lg) {
       return (containerWidth - maxContent) / 2;
     }
-    return SPACING.md;
+    return this.compactMode ? SPACING.sm : SPACING.md;
   }
 
-  // 平板 / 折叠屏 / 2in1：顶部全宽光感标题栏 + 下方左“主”栏右详情。
-  // 全宽标题栏解决全屏时标题被挤在窄列里的问题；未手动选中时回退到当前连接的隧道。
+  private expandedDetailId(): string {
+    if (this.selectedConfigId !== '') {
+      return this.selectedConfigId;
+    }
+    if (this.activeConfigId !== '') {
+      return this.activeConfigId;
+    }
+    return this.configs.length > 0 ? this.configs[0].id : '';
+  }
+
+  // 平板 / 折叠屏 / 2in1：有限宽画布内采用隧道栏 + 详情面板，避免横向拉成通栏。
   @Builder
   SplitLayout(masterWidth: number) {
     Column() {
-      this.TopBar()
+      Column({ space: SPACING.md }) {
+        this.ExpandedHeader()
 
-      Row() {
-        Stack({ alignContent: Alignment.BottomEnd }) {
-          this.ConfigListContent(masterWidth)
-
-          if (this.configs.length > 0) {
-            this.Fab()
-          }
-        }
-        .width(masterWidth)
-        .height('100%')
-        .backgroundColor($r('app.color.background'))
-
-        Divider()
-          .vertical(true)
-          .strokeWidth(1)
-          .color($r('app.color.divider'))
-
-        if (this.selectedConfigId !== '') {
-          TunnelDetailPanel({
-            configId: this.selectedConfigId,
-            contentMaxWidth: 720,
-            onEdit: () => {
-              this.editConfig(this.selectedConfigId);
-            },
-            onDelete: () => {
-              this.requestDeleteConfig(this.selectedConfigId);
-            }
-          })
-            .layoutWeight(1)
-        } else if (this.activeConfigId !== '') {
-          TunnelDetailPanel({
-            configId: this.activeConfigId,
-            contentMaxWidth: 720,
-            onEdit: () => {
-              this.editConfig(this.activeConfigId);
-            },
-            onDelete: () => {
-              this.requestDeleteConfig(this.activeConfigId);
-            }
-          })
-            .layoutWeight(1)
-        } else {
+        Row({ space: SPACING.md }) {
           Stack() {
-            this.DetailPlaceholder()
+            this.ConfigListContent(masterWidth)
+          }
+          .width(masterWidth)
+          .height('100%')
+          .backgroundColor($r('app.color.surface_subtle'))
+          .borderRadius(RADIUS.xl)
+          .clip(true)
+
+          Stack() {
+            if (this.expandedDetailId() !== '') {
+              TunnelDetailPanel({
+                configId: this.expandedDetailId(),
+                contentMaxWidth: 720,
+                compact: this.compactMode,
+                onEdit: () => {
+                  this.editConfig(this.expandedDetailId());
+                },
+                onDelete: () => {
+                  this.requestDeleteConfig(this.expandedDetailId());
+                }
+              })
+                .width('100%')
+                .height('100%')
+            } else {
+              this.DetailPlaceholder()
+            }
           }
           .layoutWeight(1)
+          .height('100%')
+          .backgroundColor($r('app.color.surface'))
+          .borderRadius(RADIUS.xl)
+          .clip(true)
+          .shadow({ radius: 6, color: 'rgba(0,0,0,0.06)', offsetY: 2 })
         }
+        .width('100%')
+        .layoutWeight(1)
       }
       .width('100%')
-      .layoutWeight(1)
+      .height('100%')
+      .constraintSize({ maxWidth: 1240 })
     }
     .width('100%')
     .height('100%')
+    .alignItems(HorizontalAlign.Center)
+    .padding({ left: SPACING.lg, right: SPACING.lg, top: SPACING.md, bottom: SPACING.lg })
   }
 
   // 手机底部胶囊项：未选中仅图标，选中态展开为品牌色填充胶囊（图标 + 文字）。
@@ -675,11 +937,15 @@ struct Index {
       }
     }
     .justifyContent(FlexAlign.Center)
-    .height(44)
+    .height(48)
     .padding({ left: 16, right: 16 })
     .backgroundColor(this.currentTabIndex === index ? $r('app.color.primary_bg') : Color.Transparent)
     .borderRadius(22)
     .hoverEffect(HoverEffect.Highlight)
+    .accessibilityRole(AccessibilityRoleType.BUTTON)
+    .accessibilityText(label)
+    .accessibilityDescription(this.currentTabIndex === index
+      ? getString($r('app.string.accessibility_selected')) : '')
     .onClick(() => {
       this.getUIContext().animateTo({ duration: 250, curve: Curve.FastOutSlowIn }, () => {
         this.currentTabIndex = index;
@@ -707,6 +973,10 @@ struct Index {
     .backgroundColor(this.currentTabIndex === index ? $r('app.color.primary_bg') : Color.Transparent)
     .borderRadius(16)
     .hoverEffect(HoverEffect.Highlight)
+    .accessibilityRole(AccessibilityRoleType.BUTTON)
+    .accessibilityText(label)
+    .accessibilityDescription(this.currentTabIndex === index
+      ? getString($r('app.string.accessibility_selected')) : '')
     .onClick(() => {
       this.getUIContext().animateTo({ duration: 250, curve: Curve.FastOutSlowIn }, () => {
         this.currentTabIndex = index;
@@ -780,6 +1050,31 @@ struct Index {
     this.pageStack.pushPath({ name: 'ConfigEdit', param: cfg });
   }
 
+  private async deleteConfigAfterStop(id: string): Promise<void> {
+    if (this.activeConfigId === id &&
+      (this.activeStatus === 'connected' || this.activeStatus === 'connecting')) {
+      const cfg = configManager.getConfigById(id);
+      if (!cfg || !(await this.toggleVpn(cfg, false))) {
+        return;
+      }
+    } else if (this.activeConfigId === id) {
+      configManager.clearActiveConfigId(id);
+      this.clearActiveUiState();
+    }
+
+    if (!configManager.deleteConfig(id)) {
+      this.showToast(getString($r('app.string.error_delete_config')));
+      return;
+    }
+    if (this.detailCoverShow) {
+      this.closeDetail();
+    }
+    if (this.selectedConfigId === id) {
+      this.selectedConfigId = '';
+    }
+    this.loadConfigs();
+  }
+
   // 详情页「删除」：二次确认后删除；若该配置正在连接/连接中先断开，再收起详情并刷新列表。
   private requestDeleteConfig(id: string): void {
     if (!id) {
@@ -791,20 +1086,7 @@ struct Index {
       confirmText: getString($r('app.string.button_delete')),
       secure: true,
       onConfirm: () => {
-        if (this.activeConfigId === id) {
-          const cfg = configManager.getConfigById(id);
-          if (cfg) {
-            this.toggleVpn(cfg, false);
-          }
-        }
-        configManager.deleteConfig(id);
-        if (this.detailCoverShow) {
-          this.closeDetail();
-        }
-        if (this.selectedConfigId === id) {
-          this.selectedConfigId = '';
-        }
-        this.loadConfigs();
+        this.deleteConfigAfterStop(id);
       }
     });
   }
@@ -836,6 +1118,11 @@ struct Index {
         }
         .alignItems(HorizontalAlign.Start)
         .layoutWeight(1)
+        .constraintSize({ minHeight: 48 })
+        .justifyContent(FlexAlign.Center)
+        .accessibilityRole(AccessibilityRoleType.BUTTON)
+        .accessibilityText(getString($r('app.string.accessibility_view_tunnel'))
+          .replace('%s', this.getActiveConfig()?.name ?? ''))
         .onClick(() => {
           this.openActiveDetail();
         })
@@ -844,7 +1131,7 @@ struct Index {
           .fontSize(TYPOGRAPHY.caption.size)
           .fontColor($r('app.color.danger'))
           .backgroundColor($r('app.color.danger_bg'))
-          .height(32)
+          .height(48)
           .padding({ left: SPACING.md, right: SPACING.md })
           .borderRadius(16)
           .onClick(() => {
@@ -854,16 +1141,25 @@ struct Index {
             }
           })
 
-        SymbolGlyph($r('sys.symbol.chevron_right'))
-          .fontSize(18)
-          .fontColor([$r('app.color.text_tertiary')])
-          .rotate({ angle: this.miniExpanded ? 90 : -90 })
-          .hoverEffect(HoverEffect.Highlight)
-          .onClick(() => {
-            this.getUIContext().animateTo({ duration: 250, curve: Curve.FastOutSlowIn }, () => {
-              this.miniExpanded = !this.miniExpanded;
-            });
-          })
+        Stack() {
+          SymbolGlyph($r('sys.symbol.chevron_right'))
+            .fontSize(18)
+            .fontColor([$r('app.color.text_tertiary')])
+            .rotate({ angle: this.miniExpanded ? 90 : -90 })
+        }
+        .width(48)
+        .height(48)
+        .borderRadius(24)
+        .hoverEffect(HoverEffect.Highlight)
+        .accessibilityRole(AccessibilityRoleType.BUTTON)
+        .accessibilityText(this.miniExpanded
+          ? $r('app.string.accessibility_collapse_connection')
+          : $r('app.string.accessibility_expand_connection'))
+        .onClick(() => {
+          this.getUIContext().animateTo({ duration: 250, curve: Curve.FastOutSlowIn }, () => {
+            this.miniExpanded = !this.miniExpanded;
+          });
+        })
       }
       .width('100%')
       .height(56)
@@ -900,7 +1196,7 @@ struct Index {
 
           Button(getString($r('app.string.button_detail')))
             .width('100%')
-            .height(36)
+            .height(48)
             .fontSize(TYPOGRAPHY.body_sm.size)
             .backgroundColor($r('app.color.surface_subtle'))
             .fontColor($r('app.color.primary'))
@@ -942,31 +1238,16 @@ struct Index {
   @Builder
   DetailCover() {
     Column() {
-      Row() {
-        SymbolGlyph($r('sys.symbol.chevron_left'))
-          .fontSize(24)
-          .fontColor([$r('app.color.text_primary')])
-          .hoverEffect(HoverEffect.Highlight)
-          .onClick(() => {
-            this.closeDetail();
-          })
-
-        Text(getString($r('app.string.page_tunnel_detail')))
-          .fontSize(TYPOGRAPHY.title_sm.size)
-          .fontWeight(TYPOGRAPHY.title_sm.weight)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-
-        Blank().width(24)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.md, right: SPACING.md })
-      .backgroundColor($r('app.color.surface'))
+      PageHeader({
+        title: getString($r('app.string.page_tunnel_detail')),
+        onBack: () => {
+          this.closeDetail();
+        }
+      })
 
       TunnelDetailPanel({
         configId: this.detailCoverId,
+        compact: this.compactMode,
         onEdit: () => {
           this.editConfig(this.detailCoverId);
         },
@@ -997,7 +1278,14 @@ struct Index {
             .transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 16 })))
           } else {
             Column() {
-              SettingsPage({ embedded: true })
+              SettingsPage({
+                pageStack: this.pageStack,
+                embedded: true,
+                bottomInset: this.bottomContentClearance(),
+                onCompactModeChange: (isCompact: boolean) => {
+                  this.compactMode = isCompact;
+                }
+              })
             }
             .width('100%')
             .height('100%')
@@ -1015,7 +1303,14 @@ struct Index {
               .transition(TransitionEffect.OPACITY.combine(TransitionEffect.translate({ y: 16 })))
             } else {
               Column() {
-                SettingsPage({ embedded: true })
+                SettingsPage({
+                  pageStack: this.pageStack,
+                  embedded: true,
+                  bottomInset: this.bottomContentClearance(),
+                  onCompactModeChange: (isCompact: boolean) => {
+                    this.compactMode = isCompact;
+                  }
+                })
               }
               .width('100%')
               .height('100%')
@@ -1033,18 +1328,6 @@ struct Index {
         } else {
           // 平板/2in1：左侧纵向胶囊 Tab 栏
           this.TabCapsuleV()
-          // 连接中 MiniBar 浮于内容区底部居中
-          if (this.activeConfigId !== '') {
-            Column() {
-              this.MiniBar()
-            }
-            .width('100%')
-            .height('100%')
-            .justifyContent(FlexAlign.End)
-            .alignItems(HorizontalAlign.Center)
-            .padding({ left: 120, right: 16, bottom: 24 })
-            .hitTestBehavior(HitTestMode.Transparent)
-          }
         }
       }
       .width('100%')
@@ -1052,14 +1335,15 @@ struct Index {
       .backgroundColor($r('app.color.background'))
       .onAreaChange((_oldArea, newArea) => {
         if (newArea.width > 0) {
-          this.windowWidth = this.getUIContext().px2vp(newArea.width as number);
+          // Area.width 已是 vp；再次 px2vp 会把横屏宽度缩小一遍并误判成手机布局。
+          this.windowWidth = newArea.width as number;
           this.breakpoint = getBreakpoint(this.windowWidth);
         }
       })
     }
     .mode(NavigationMode.Stack)
     .hideTitleBar(true)
-    .navDestination(PageMap)
+    .navDestination(this.PageMap)
     // 一镜到底：手机端隧道详情走全屏 Cover（不经 NavPathStack，不会卡返回），
     // 由 openDetail/closeDetail 的 animateTo 驱动 geometryTransition 形变。
     .bindContentCover($$this.detailCoverShow, this.DetailCover(), { modalTransition: ModalTransition.NONE })

@@ -1,15 +1,17 @@
 import { configManager } from '../service/ConfigManager';
-import type { WgConfig } from '../model/WgConfig';
-import { DEFAULT_CONFIG } from '../common/Constants';
+import type { TunnelBehavior, WgConfig } from '../model/WgConfig';
+import { DEFAULT_CONFIG, DEFAULT_TUNNEL_BEHAVIOR } from '../common/Constants';
 import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
 import { SectionCard } from '../components/common/SectionCard';
 import { SecureKeyField } from '../components/config/SecureKeyField';
 import { KeyField } from '../components/config/KeyField';
 import { EndpointInput } from '../components/config/EndpointInput';
 import { RouteModeSelector } from '../components/config/RouteModeSelector';
-import { AdvancedSection } from '../components/config/AdvancedSection';
+import { PageHeader } from '../components/app/PageHeader';
 import { DialogHelper } from '../common/DialogHelper';
 import { validateBase64Key, validateEndpoint, validateCidr, validateDns, validateMtu } from '../common/Validators';
+import { buildVpnRoutePlan } from '../common/VpnRoutePlan';
+import { parseEndpoint } from '../common/Utils';
 
 interface FormErrors {
   name?: string;
@@ -18,13 +20,15 @@ interface FormErrors {
   dns?: string;
   mtu?: string;
   peerPublicKey?: string;
+  presharedKey?: string;
   endpoint?: string;
   allowedIPs?: string;
+  keepalive?: string;
 }
 
 @Component
 export struct ConfigEditPage {
-  @Consume('pageStack') pageStack: NavPathStack;
+  pageStack: NavPathStack = new NavPathStack();
   @Prop navParam: Object | null = null;
   @State config: WgConfig = {
     id: '',
@@ -45,22 +49,75 @@ export struct ConfigEditPage {
   @State reconnectOnNetworkChange: boolean = false;
   @State blockIpv6Leak: boolean = false;
   @State allowLanAccess: boolean = false;
+  @State isExistingConfig: boolean = false;
   @State appeared: boolean = false;
 
   aboutToAppear(): void {
-    // navParam 有值(来自预览页的 WgConfig)则编辑它，否则新建
     const p = this.navParam;
     if (p !== null) {
       const cfg = p as WgConfig;
       if (typeof cfg.privateKey === 'string') {
-        this.config = cfg;
+        // Navigation parameters may still be owned by the list/preview page. Edit an isolated copy so that
+        // backing out without saving never mutates the source object.
+        this.config = this.copyConfig(cfg);
+        this.isExistingConfig = this.config.id.length > 0 &&
+          configManager.getConfigById(this.config.id) !== undefined;
         if (!this.config.id) {
           this.config.id = Date.now().toString();
         }
+        this.loadBehavior(this.config.behavior);
         return;
       }
     }
+    this.isExistingConfig = false;
     this.config.id = Date.now().toString();
+    this.loadBehavior(undefined);
+  }
+
+  private copyConfig(source: WgConfig): WgConfig {
+    const copied: WgConfig = {
+      id: source.id,
+      name: source.name,
+      privateKey: source.privateKey,
+      address: source.address,
+      dns: source.dns,
+      mtu: source.mtu,
+      peerPublicKey: source.peerPublicKey,
+      presharedKey: source.presharedKey,
+      allowedIPs: source.allowedIPs,
+      endpoint: source.endpoint,
+      persistentKeepalive: source.persistentKeepalive
+    };
+    if (source.behavior !== undefined) {
+      copied.behavior = this.copyBehavior(source.behavior);
+    }
+    return copied;
+  }
+
+  private copyBehavior(source: TunnelBehavior): TunnelBehavior {
+    return {
+      autoConnect: source.autoConnect,
+      reconnectOnNetworkChange: source.reconnectOnNetworkChange,
+      allowLanAccess: source.allowLanAccess,
+      blockIpv6Leak: source.blockIpv6Leak
+    };
+  }
+
+  private loadBehavior(source: TunnelBehavior | undefined): void {
+    const behavior = source ?? DEFAULT_TUNNEL_BEHAVIOR;
+    this.autoConnect = behavior.autoConnect;
+    this.reconnectOnNetworkChange = behavior.reconnectOnNetworkChange;
+    this.allowLanAccess = behavior.allowLanAccess;
+    this.blockIpv6Leak = behavior.blockIpv6Leak;
+  }
+
+  private currentBehavior(): TunnelBehavior {
+    return {
+      autoConnect: this.autoConnect,
+      reconnectOnNetworkChange: this.reconnectOnNetworkChange,
+      allowLanAccess: this.allowLanAccess,
+      blockIpv6Leak: this.blockIpv6Leak
+    };
   }
 
   private validate(): boolean {
@@ -76,10 +133,14 @@ export struct ConfigEditPage {
 
     if (!this.config.address || !validateCidr(this.config.address)) {
       errs.address = getString($r('app.string.error_invalid_cidr'));
+    } else if (this.config.address.includes(':')) {
+      errs.address = getString($r('app.string.error_ipv6_address_unsupported'));
     }
 
     if (this.config.dns && !validateDns(this.config.dns)) {
       errs.dns = getString($r('app.string.error_invalid_dns'));
+    } else if (this.config.dns.includes(':')) {
+      errs.dns = getString($r('app.string.error_ipv6_dns_unsupported'));
     }
 
     if (this.config.mtu !== 0 && !validateMtu(this.config.mtu)) {
@@ -89,37 +150,78 @@ export struct ConfigEditPage {
     if (!this.config.peerPublicKey || !validateBase64Key(this.config.peerPublicKey)) {
       errs.peerPublicKey = getString($r('app.string.error_invalid_key'));
     }
+    if (this.config.presharedKey.length > 0 && !validateBase64Key(this.config.presharedKey)) {
+      errs.presharedKey = getString($r('app.string.error_invalid_key'));
+    }
 
     if (!this.config.endpoint || !validateEndpoint(this.config.endpoint)) {
       errs.endpoint = getString($r('app.string.error_invalid_endpoint'));
+    } else if (parseEndpoint(this.config.endpoint)?.isIPv6 === true) {
+      errs.endpoint = getString($r('app.string.error_ipv6_endpoint_unsupported'));
     }
 
     if (!this.config.allowedIPs || this.config.allowedIPs.trim().length === 0) {
       errs.allowedIPs = getString($r('app.string.error_empty_allowed_ips'));
+    } else {
+      const routePlan = buildVpnRoutePlan(this.config.allowedIPs);
+      const hasInvalidRoute = routePlan.ignoredRoutes.some(route => route.reason === 'invalid_cidr');
+      if (hasInvalidRoute) {
+        errs.allowedIPs = getString($r('app.string.error_invalid_cidr'));
+      } else if (routePlan.acceptedIpv4Routes.length === 0) {
+        errs.allowedIPs = getString($r('app.string.error_ipv4_route_required'));
+      }
+    }
+    if (this.config.persistentKeepalive < 0 || this.config.persistentKeepalive > 65535) {
+      errs.keepalive = getString($r('app.string.error_invalid_keepalive'));
     }
 
     this.errors = errs;
-    return Object.keys(errs).length === 0;
+    return errs.name === undefined &&
+      errs.privateKey === undefined &&
+      errs.address === undefined &&
+      errs.dns === undefined &&
+      errs.mtu === undefined &&
+      errs.peerPublicKey === undefined &&
+      errs.presharedKey === undefined &&
+      errs.endpoint === undefined &&
+      errs.allowedIPs === undefined &&
+      errs.keepalive === undefined;
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
+    } catch {}
   }
 
   saveConfig(): void {
     if (!this.validate()) {
-      try {
-        this.getUIContext().getPromptAction().showToast({ message: getString($r('app.string.error_fix_form')), duration: 2000 });
-      } catch {}
+      this.showToast(getString($r('app.string.error_fix_form')));
       return;
     }
 
     if (!this.config.id) {
       this.config.id = Date.now().toString();
     }
-    configManager.saveConfig(this.config);
+    this.config.behavior = this.currentBehavior();
+    if (!configManager.saveConfig(this.config)) {
+      this.showToast(getString($r('app.string.error_save_config')));
+      return;
+    }
+    this.showToast(getString($r('app.string.toast_saved')));
     this.pageStack.pop();
   }
 
   deleteConfig(): void {
-    if (this.config.id) {
-      configManager.deleteConfig(this.config.id);
+    if (this.isExistingConfig && this.config.id) {
+      if (configManager.getActiveConfigId() === this.config.id) {
+        this.showToast(getString($r('app.string.error_disconnect_before_delete')));
+        return;
+      }
+      if (!configManager.deleteConfig(this.config.id)) {
+        this.showToast(getString($r('app.string.error_delete_config')));
+        return;
+      }
       this.pageStack.pop();
     }
   }
@@ -143,13 +245,22 @@ export struct ConfigEditPage {
     if (key === 'dns') return this.errors.dns || '';
     if (key === 'mtu') return this.errors.mtu || '';
     if (key === 'peerPublicKey') return this.errors.peerPublicKey || '';
+    if (key === 'presharedKey') return this.errors.presharedKey || '';
     if (key === 'endpoint') return this.errors.endpoint || '';
     if (key === 'allowedIPs') return this.errors.allowedIPs || '';
+    if (key === 'keepalive') return this.errors.keepalive || '';
     return '';
   }
 
   @Builder
-  FormInput(label: string, value: string, placeholder: string, onChange: (val: string) => void, errorKey: string, inputType: InputType) {
+  FormInput(
+    label: string,
+    value: string,
+    placeholder: string,
+    onChange: (val: string) => void,
+    errorKey: string,
+    inputType: InputType
+  ) {
     Column() {
       Text(label)
         .fontSize(TYPOGRAPHY.label.size)
@@ -161,9 +272,14 @@ export struct ConfigEditPage {
       TextInput({ placeholder: placeholder, text: value })
         .fontSize(TYPOGRAPHY.body_md.size)
         .width('100%')
-        .height(44)
+        .height(48)
         .backgroundColor($r('app.color.surface_subtle'))
-        .border({ width: 1, color: this.getError(errorKey).length > 0 ? $r('app.color.danger') : $r('app.color.divider'), radius: RADIUS.md })
+        .border({
+          width: 1,
+          color: this.getError(errorKey).length > 0
+            ? $r('app.color.danger') : $r('app.color.divider'),
+          radius: RADIUS.md
+        })
         .type(inputType)
         .onChange(onChange)
 
@@ -192,7 +308,7 @@ export struct ConfigEditPage {
       TextInput({ placeholder: placeholder, text: value })
         .fontSize(TYPOGRAPHY.body_md.size)
         .width('100%')
-        .height(44)
+        .height(48)
         .backgroundColor($r('app.color.surface_subtle'))
         .border({ width: 1, color: $r('app.color.divider'), radius: RADIUS.md })
         .onChange(onChange)
@@ -203,42 +319,16 @@ export struct ConfigEditPage {
 
   build() {
     Column() {
-      Row() {
-        SymbolGlyph($r('sys.symbol.chevron_left'))
-          .fontSize(24)
-          .fontColor([$r('app.color.text_primary')])
-          .onClick(() => {
-            this.pageStack.pop();
-          })
-
-        Text(this.config.id ? getString($r('app.string.page_config_edit')) : getString($r('app.string.page_config_new')))
-          .fontSize(TYPOGRAPHY.title_sm.size)
-          .fontWeight(TYPOGRAPHY.title_sm.weight)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-
-        Text(getString($r('app.string.button_save')))
-          .fontSize(TYPOGRAPHY.body_sm.size)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(Color.White)
-          .padding({ left: SPACING.md, right: SPACING.md, top: 6, bottom: 6 })
-          .backgroundColor($r('app.color.primary'))
-          .borderRadius(RADIUS.full)
-          .hoverEffect(HoverEffect.Highlight)
-          .stateStyles({
-            pressed: {
-              .opacity(0.82)
-            }
-          })
-          .onClick(() => {
-            this.saveConfig();
-          })
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.md, right: SPACING.md })
-      .backgroundColor($r('app.color.surface'))
+      PageHeader({
+        pageStack: this.pageStack,
+        title: this.isExistingConfig
+          ? getString($r('app.string.page_config_edit'))
+          : getString($r('app.string.page_config_new')),
+        actionText: getString($r('app.string.button_save')),
+        onAction: () => {
+          this.saveConfig();
+        }
+      })
 
       Scroll() {
         Column() {
@@ -367,7 +457,7 @@ export struct ConfigEditPage {
                 this.config.persistentKeepalive > 0 ? String(this.config.persistentKeepalive) : '',
                 getString($r('app.string.placeholder_keepalive')),
                 (v) => this.config.persistentKeepalive = v ? parseInt(v) : 0,
-                '',
+                this.getError('keepalive'),
                 InputType.Number
               )
 
@@ -377,24 +467,18 @@ export struct ConfigEditPage {
                 value: this.config.presharedKey,
                 onReplace: (val) => this.config.presharedKey = val
               })
+
+              if (this.getError('presharedKey').length > 0) {
+                Text(this.getError('presharedKey'))
+                  .fontSize(TYPOGRAPHY.caption.size)
+                  .fontColor($r('app.color.danger'))
+                  .width('100%')
+              }
             }
             .width('100%')
           }
 
-          SectionCard({ title: getString($r('app.string.section_advanced')) }) {
-            AdvancedSection({
-              autoConnect: this.autoConnect,
-              reconnectOnNetworkChange: this.reconnectOnNetworkChange,
-              blockIpv6Leak: this.blockIpv6Leak,
-              allowLanAccess: this.allowLanAccess,
-              onAutoConnectChange: (val) => this.autoConnect = val,
-              onReconnectChange: (val) => this.reconnectOnNetworkChange = val,
-              onBlockIpv6Change: (val) => this.blockIpv6Leak = val,
-              onAllowLanChange: (val) => this.allowLanAccess = val
-            })
-          }
-
-          if (this.config.id) {
+          if (this.isExistingConfig) {
             Button(getString($r('app.string.button_delete')))
               .fontSize(TYPOGRAPHY.body_md.size)
               .fontColor($r('app.color.danger'))

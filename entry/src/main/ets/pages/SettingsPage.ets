@@ -1,21 +1,56 @@
 import { common } from '@kit.AbilityKit';
 import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
 import { SectionCard } from '../components/common/SectionCard';
+import { PageHeader } from '../components/app/PageHeader';
 import { settingsService } from '../service/SettingsService';
-import type { ThemeMode } from '../service/SettingsService';
+import type { BoolSettingKey, ThemeMode } from '../service/SettingsService';
 
 @Component
 export struct SettingsPage {
-  @Consume('pageStack') pageStack: NavPathStack;
+  pageStack: NavPathStack = new NavPathStack();
   // 作为「设置」Tab 内嵌时为 true：不显示返回箭头（Tab 无返回栈）。
   @Prop embedded: boolean = false;
+  @Prop bottomInset: number = 88;
   @State currentTheme: ThemeMode = 'system';
+  @State compactMode: boolean = false;
+  @State keyRevealConfirm: boolean = true;
+  @State reportCopyConfirm: boolean = true;
+  @State autoClearClipboard: boolean = true;
   private themeOptions: ThemeMode[] = ['system', 'light', 'dark'];
+
+  onCompactModeChange?: (isCompact: boolean) => void;
 
   aboutToAppear(): void {
     const ctx = this.getUIContext().getHostContext() as common.UIAbilityContext;
     settingsService.init(ctx);
     this.currentTheme = settingsService.getTheme();
+    this.compactMode = settingsService.getBool('compactMode');
+    this.keyRevealConfirm = settingsService.getBool('keyRevealConfirm');
+    this.reportCopyConfirm = settingsService.getBool('reportCopyConfirm');
+    this.autoClearClipboard = settingsService.getBool('autoClearClipboard');
+  }
+
+  private showToast(message: string): void {
+    try {
+      this.getUIContext().getPromptAction().showToast({ message, duration: 2000 });
+    } catch {}
+  }
+
+  private updateBoolSetting(key: BoolSettingKey, value: boolean): void {
+    if (!settingsService.setBool(key, value)) {
+      this.showToast(getString($r('app.string.error_save_setting')));
+      return;
+    }
+    if (key === 'compactMode') {
+      this.compactMode = value;
+      this.onCompactModeChange?.(value);
+    } else if (key === 'keyRevealConfirm') {
+      this.keyRevealConfirm = value;
+    } else if (key === 'reportCopyConfirm') {
+      this.reportCopyConfirm = value;
+    } else if (key === 'autoClearClipboard') {
+      this.autoClearClipboard = value;
+    }
   }
 
   private themeLabel(mode: ThemeMode): string {
@@ -29,21 +64,48 @@ export struct SettingsPage {
   }
 
   @Builder
-  SwitchRow(label: string, key: string) {
+  SwitchRow(label: string, key: BoolSettingKey, value: boolean) {
     Row() {
       Text(label)
         .fontSize(TYPOGRAPHY.body_md.size)
         .fontColor($r('app.color.text_primary'))
         .layoutWeight(1)
+        .maxLines(2)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
 
-      Toggle({ type: ToggleType.Switch, isOn: settingsService.getBool(key) })
+      Toggle({ type: ToggleType.Switch, isOn: value })
         .selectedColor($r('app.color.primary'))
+        .accessibilityText(label)
         .onChange((val: boolean) => {
-          settingsService.setBool(key, val);
+          this.updateBoolSetting(key, val);
         })
     }
     .width('100%')
-    .height(48)
+    .constraintSize({ minHeight: 48 })
+    .padding({ top: SPACING.xs, bottom: SPACING.xs })
+  }
+
+  @Builder
+  StatusRow(label: string, status: string) {
+    Row({ space: SPACING.sm }) {
+      Text(label)
+        .fontSize(TYPOGRAPHY.body_md.size)
+        .fontColor($r('app.color.text_primary'))
+        .layoutWeight(1)
+        .maxLines(2)
+
+      Row({ space: SPACING.xs }) {
+        SymbolGlyph($r('sys.symbol.checkmark_shield'))
+          .fontSize(16)
+          .fontColor([$r('app.color.success')])
+        Text(status)
+          .fontSize(TYPOGRAPHY.caption.size)
+          .fontColor($r('app.color.success'))
+      }
+    }
+    .width('100%')
+    .constraintSize({ minHeight: 48 })
+    .padding({ top: SPACING.xs, bottom: SPACING.xs })
   }
 
   @Builder
@@ -59,9 +121,12 @@ export struct SettingsPage {
         .fontColor([$r('app.color.text_tertiary')])
     }
     .width('100%')
-    .height(48)
+    .constraintSize({ minHeight: 48 })
+    .padding({ top: SPACING.xs, bottom: SPACING.xs })
     .borderRadius(RADIUS.sm)
     .hoverEffect(HoverEffect.Highlight)
+    .accessibilityRole(AccessibilityRoleType.BUTTON)
+    .accessibilityText(label)
     .onClick(onClick)
   }
 
@@ -73,7 +138,8 @@ export struct SettingsPage {
       // 平移由 onClick 的 animateTo 驱动，选中项在三段间“滑动”而非跳变。
       Row()
         .width('33.33%')
-        .height(36)
+        .height(40)
+        .margin({ top: 4 })
         .backgroundColor($r('app.color.surface'))
         .borderRadius(RADIUS.sm)
         .shadow({ radius: 4, color: 'rgba(0,0,0,0.08)', offsetX: 0, offsetY: 1 })
@@ -81,108 +147,102 @@ export struct SettingsPage {
 
       Row() {
         ForEach(this.themeOptions, (mode: ThemeMode) => {
-          Text(this.themeLabel(mode))
-            .fontSize(TYPOGRAPHY.body_sm.size)
-            .fontWeight(this.currentTheme === mode ? FontWeight.Medium : FontWeight.Regular)
-            .fontColor(this.currentTheme === mode ? $r('app.color.primary') : $r('app.color.text_secondary'))
-            .textAlign(TextAlign.Center)
-            .layoutWeight(1)
-            .height(36)
-            .onClick(() => {
+          Row() {
+            Text(this.themeLabel(mode))
+              .fontSize(TYPOGRAPHY.body_sm.size)
+              .fontWeight(this.currentTheme === mode ? FontWeight.Medium : FontWeight.Regular)
+              .fontColor(this.currentTheme === mode ? $r('app.color.primary') : $r('app.color.text_secondary'))
+              .textAlign(TextAlign.Center)
+              .maxLines(1)
+          }
+          .layoutWeight(1)
+          .height(48)
+          .justifyContent(FlexAlign.Center)
+          .accessibilityRole(AccessibilityRoleType.BUTTON)
+          .accessibilityText(this.themeLabel(mode))
+          .accessibilityDescription(this.currentTheme === mode
+            ? getString($r('app.string.accessibility_selected')) : '')
+          .onClick(() => {
+            if (settingsService.setTheme(mode)) {
               this.getUIContext().animateTo({ duration: 250, curve: Curve.FastOutSlowIn }, () => {
                 this.currentTheme = mode;
               });
-              settingsService.setTheme(mode);
-            })
+            } else {
+              this.showToast(getString($r('app.string.error_save_setting')));
+            }
+          })
         }, (mode: ThemeMode) => mode)
       }
       .width('100%')
     }
     .width('100%')
-    .height(44)
-    .padding(4)
+    .height(48)
     .backgroundColor($r('app.color.surface_subtle'))
     .borderRadius(RADIUS.md)
   }
 
   build() {
     Column() {
-      // Header
-      Row() {
-        if (!this.embedded) {
-          SymbolGlyph($r('sys.symbol.chevron_left'))
-            .fontSize(24)
-            .fontColor([$r('app.color.text_primary')])
-            .hoverEffect(HoverEffect.Highlight)
-            .onClick(() => {
-              this.pageStack.pop();
-            })
-        } else {
-          Blank().width(24)
-        }
-
-        Text(getString($r('app.string.page_settings')))
-          .fontSize(TYPOGRAPHY.title_sm.size)
-          .fontWeight(TYPOGRAPHY.title_sm.weight)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-
-        Blank().width(24)
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.md, right: SPACING.md })
-      .backgroundColor($r('app.color.surface'))
+      PageHeader({
+        pageStack: this.pageStack,
+        title: getString($r('app.string.page_settings')),
+        showBack: !this.embedded
+      })
 
       Scroll() {
         // 居中 + 限宽，避免平板/2in1 上内容被拉得过宽
         Column() {
-        Column({ space: SPACING.md }) {
+        Column({ space: this.compactMode ? SPACING.sm : SPACING.md }) {
           // Appearance（放最前，主题切换是最常用的）
-          SectionCard({ title: getString($r('app.string.section_appearance')) }) {
+          SectionCard({
+            title: getString($r('app.string.section_appearance')),
+            cardPadding: this.compactMode ? SPACING.sm : SPACING.md
+          }) {
             Column({ space: SPACING.sm }) {
               this.ThemeSegment()
-              this.SwitchRow(getString($r('app.string.option_compact_mode')), 'compactMode')
-              this.SwitchRow(getString($r('app.string.option_status_bar_traffic')), 'statusBarTraffic')
-            }
-            .width('100%')
-          }
-
-          // Connection Behavior
-          SectionCard({ title: getString($r('app.string.section_connection_behavior')) }) {
-            Column({ space: SPACING.xs }) {
-              this.SwitchRow(getString($r('app.string.option_auto_connect')), 'autoConnect')
-              this.SwitchRow(getString($r('app.string.option_reconnect')), 'reconnectOnNetworkChange')
-              this.SwitchRow(getString($r('app.string.option_retry_failure')), 'retryOnFailure')
-            }
-            .width('100%')
-          }
-
-          // Routing & Network
-          SectionCard({ title: getString($r('app.string.section_routing_network')) }) {
-            Column({ space: SPACING.xs }) {
-              this.SwitchRow(getString($r('app.string.option_allow_lan')), 'allowLanAccess')
-              this.SwitchRow(getString($r('app.string.option_block_ipv6')), 'blockIpv6Leak')
-              this.SwitchRow(getString($r('app.string.option_mtu_auto')), 'defaultMtuAuto')
-              this.SwitchRow(getString($r('app.string.option_dns_leak')), 'dnsLeakDetection')
+              this.SwitchRow(
+                getString($r('app.string.option_compact_mode')),
+                'compactMode',
+                this.compactMode
+              )
             }
             .width('100%')
           }
 
           // Privacy & Security
-          SectionCard({ title: getString($r('app.string.section_privacy_security')) }) {
+          SectionCard({
+            title: getString($r('app.string.section_privacy_security')),
+            cardPadding: this.compactMode ? SPACING.sm : SPACING.md
+          }) {
             Column({ space: SPACING.xs }) {
-              this.SwitchRow(getString($r('app.string.option_key_reveal_confirm')), 'keyRevealConfirm')
-              this.SwitchRow(getString($r('app.string.option_export_confirm')), 'exportConfirm')
-              this.SwitchRow(getString($r('app.string.option_auto_clear_clipboard')), 'autoClearClipboard')
-              this.SwitchRow(getString($r('app.string.option_log_sanitization')), 'logSanitization')
+              this.SwitchRow(
+                getString($r('app.string.option_key_reveal_confirm')),
+                'keyRevealConfirm',
+                this.keyRevealConfirm
+              )
+              this.SwitchRow(
+                getString($r('app.string.option_report_copy_confirm')),
+                'reportCopyConfirm',
+                this.reportCopyConfirm
+              )
+              this.SwitchRow(
+                getString($r('app.string.option_auto_clear_clipboard')),
+                'autoClearClipboard',
+                this.autoClearClipboard
+              )
+              this.StatusRow(
+                getString($r('app.string.option_log_sanitization')),
+                getString($r('app.string.label_always_on'))
+              )
             }
             .width('100%')
           }
 
           // About
-          SectionCard({ title: getString($r('app.string.page_about')) }) {
+          SectionCard({
+            title: getString($r('app.string.page_about')),
+            cardPadding: this.compactMode ? SPACING.sm : SPACING.md
+          }) {
             Column({ space: SPACING.xs }) {
               this.NavigationRow(getString($r('app.string.label_version_info')), () => {
                 this.pageStack.pushPath({ name: 'About' });
@@ -200,7 +260,7 @@ export struct SettingsPage {
         .constraintSize({ maxWidth: 720 })
         .width('100%')
         // 底部留白避开毛玻璃 Tab 栏（barOverlap）
-        .padding({ left: SPACING.md, right: SPACING.md, top: SPACING.md, bottom: 88 })
+        .padding({ left: SPACING.md, right: SPACING.md, top: SPACING.md, bottom: this.bottomInset })
         }
         .width('100%')
       }

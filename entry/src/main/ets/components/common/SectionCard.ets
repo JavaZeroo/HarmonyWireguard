@@ -4,7 +4,8 @@ import { SPACING, RADIUS, SHADOW } from '../../common/DesignSystem';
 export struct SectionCard {
   @Prop title: string = '';
   @Prop cardBackgroundColor: ResourceColor = $r('app.color.surface');
-  @Prop marginTop: number = SPACING.md;
+  // 间距由父级 Column({ space }) 统一管理，避免卡片自身 margin 与父级 space 叠加成 32vp。
+  @Prop marginTop: number = 0;
   @Prop marginBottom: number = 0;
   @Prop cardPadding: number = SPACING.md;
   @Prop radius: number = RADIUS.lg;

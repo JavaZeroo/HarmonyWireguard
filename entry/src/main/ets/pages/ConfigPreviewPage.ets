@@ -1,12 +1,13 @@
 import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../common/DesignSystem';
 import { deriveRouteMode, parseEndpoint } from '../common/Utils';
 import { SectionCard } from '../components/common/SectionCard';
+import { PageHeader } from '../components/app/PageHeader';
 import { configManager } from '../service/ConfigManager';
 import type { WgConfig } from '../model/WgConfig';
 
 @Component
 export struct ConfigPreviewPage {
-  @Consume('pageStack') pageStack: NavPathStack;
+  pageStack: NavPathStack = new NavPathStack();
   @Prop navParam: Object | null = null;
   @State risks: string[] = [];
   @State config: WgConfig = {
@@ -78,9 +79,20 @@ export struct ConfigPreviewPage {
     if (!this.config.id) {
       this.config.id = Date.now().toString();
     }
-    configManager.saveConfig(this.config);
+    if (!configManager.saveConfig(this.config)) {
+      try {
+        this.getUIContext().getPromptAction().showToast({
+          message: getString($r('app.string.error_save_config')),
+          duration: 2000
+        });
+      } catch {}
+      return;
+    }
     try {
-      this.getUIContext().getPromptAction().showToast({ message: getString($r('app.string.toast_saved')), duration: 1500 });
+      this.getUIContext().getPromptAction().showToast({
+        message: getString($r('app.string.toast_saved')),
+        duration: 1500
+      });
     } catch {}
     this.pageStack.pop();
   }
@@ -107,43 +119,14 @@ export struct ConfigPreviewPage {
 
   build() {
     Column() {
-      // Header
-      Row() {
-        SymbolGlyph($r('sys.symbol.chevron_left'))
-          .fontSize(24)
-          .fontColor([$r('app.color.text_primary')])
-          .onClick(() => {
-            this.pageStack.pop();
-          })
-
-        Text(getString($r('app.string.page_config_preview')))
-          .fontSize(TYPOGRAPHY.title_sm.size)
-          .fontWeight(TYPOGRAPHY.title_sm.weight)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Center)
-
-        Text(getString($r('app.string.button_save')))
-          .fontSize(TYPOGRAPHY.body_sm.size)
-          .fontWeight(FontWeight.Medium)
-          .fontColor(Color.White)
-          .padding({ left: SPACING.md, right: SPACING.md, top: 6, bottom: 6 })
-          .backgroundColor($r('app.color.primary'))
-          .borderRadius(RADIUS.full)
-          .hoverEffect(HoverEffect.Highlight)
-          .stateStyles({
-            pressed: {
-              .opacity(0.82)
-            }
-          })
-          .onClick(() => {
-            this.saveConfig();
-          })
-      }
-      .width('100%')
-      .height(56)
-      .padding({ left: SPACING.md, right: SPACING.md })
-      .backgroundColor($r('app.color.surface'))
+      PageHeader({
+        pageStack: this.pageStack,
+        title: getString($r('app.string.page_config_preview')),
+        actionText: getString($r('app.string.button_save')),
+        onAction: () => {
+          this.saveConfig();
+        }
+      })
 
       Scroll() {
         Column() {
@@ -169,10 +152,12 @@ export struct ConfigPreviewPage {
           // Interface
           SectionCard({ title: getString($r('app.string.section_interface')) }) {
             Column() {
-              this.InfoRow('Address', this.config.address);
-              this.InfoRow('DNS', this.config.dns || getString($r('app.string.label_auto')));
-              this.InfoRow('MTU', this.config.mtu > 0 ? String(this.config.mtu) : getString($r('app.string.label_auto')));
-              this.InfoRow('PrivateKey', '', true);
+              this.InfoRow(getString($r('app.string.field_address')), this.config.address);
+              this.InfoRow(getString($r('app.string.field_dns')),
+                this.config.dns || getString($r('app.string.label_auto')));
+              this.InfoRow(getString($r('app.string.field_mtu')),
+                this.config.mtu > 0 ? String(this.config.mtu) : getString($r('app.string.label_auto')));
+              this.InfoRow(getString($r('app.string.field_private_key')), '', true);
             }
             .width('100%')
           }
@@ -180,12 +165,16 @@ export struct ConfigPreviewPage {
           // Peer
           SectionCard({ title: getString($r('app.string.section_peer')) }) {
             Column() {
-              this.InfoRow('Endpoint', this.config.endpoint);
-              this.InfoRow('PublicKey', this.config.peerPublicKey.substring(0, 20) + '...');
+              this.InfoRow(getString($r('app.string.field_endpoint')), this.config.endpoint);
+              this.InfoRow(getString($r('app.string.field_public_key')),
+                this.config.peerPublicKey.substring(0, 20) + '...');
               if (this.config.presharedKey) {
-                this.InfoRow('PresharedKey', '', true);
+                this.InfoRow(getString($r('app.string.field_preshared_key')), '', true);
               }
-              this.InfoRow('Keepalive', this.config.persistentKeepalive > 0 ? this.config.persistentKeepalive + 's' : getString($r('app.string.label_off')));
+              this.InfoRow(getString($r('app.string.field_keepalive')),
+                this.config.persistentKeepalive > 0
+                  ? this.config.persistentKeepalive + 's'
+                  : getString($r('app.string.label_off')));
             }
             .width('100%')
           }

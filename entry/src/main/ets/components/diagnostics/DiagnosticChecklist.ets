@@ -1,13 +1,14 @@
 import { SPACING, RADIUS, TYPOGRAPHY, getString } from '../../common/DesignSystem';
-import type { DiagnosticItem } from '../../model/WgConfig';
+import type { DiagnosticItem, DiagnosticStatusType } from '../../model/WgConfig';
 
 @Component
 export struct DiagnosticChecklist {
   @Prop items: DiagnosticItem[] = [];
+  @Prop isRunning: boolean = false;
 
   onRunAgain?: () => void;
 
-  private getStatusIcon(status: string): Resource {
+  private getStatusIcon(status: DiagnosticStatusType): Resource {
     if (status === 'pass') {
       return $r('sys.symbol.checkmark_circle');
     } else if (status === 'warning') {
@@ -19,7 +20,7 @@ export struct DiagnosticChecklist {
     }
   }
 
-  private getStatusColor(status: string): ResourceColor {
+  private getStatusColor(status: DiagnosticStatusType): ResourceColor {
     if (status === 'pass') {
       return $r('app.color.success');
     } else if (status === 'warning') {
@@ -40,11 +41,15 @@ export struct DiagnosticChecklist {
           .fontColor($r('app.color.text_primary'))
           .layoutWeight(1)
 
-        Button(getString($r('app.string.button_retry')))
-          .fontSize(12)
+        Button(this.isRunning
+          ? getString($r('app.string.label_checking'))
+          : getString($r('app.string.button_retry')))
+          .fontSize(TYPOGRAPHY.body_sm.size)
           .fontColor($r('app.color.primary'))
           .backgroundColor('transparent')
-          .height(32)
+          .height(48)
+          .enabled(!this.isRunning)
+          .accessibilityText($r('app.string.button_retry'))
           .onClick(() => {
             this.onRunAgain?.();
           })

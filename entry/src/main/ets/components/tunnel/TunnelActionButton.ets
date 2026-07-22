@@ -4,6 +4,7 @@ import type { TunnelStatusType } from '../../model/WgConfig';
 @Component
 export struct TunnelActionButton {
   @Prop status: TunnelStatusType = 'disconnected';
+  @Prop tunnelName: string = '';
 
   onPrimaryAction?: () => void;
 
@@ -31,6 +32,16 @@ export struct TunnelActionButton {
     }
   }
 
+  private getAccessibilityText(): string {
+    if (this.status === 'connected') {
+      return getString($r('app.string.accessibility_disconnect_tunnel')).replace('%s', this.tunnelName);
+    }
+    if (this.status === 'connecting') {
+      return this.getButtonText();
+    }
+    return getString($r('app.string.accessibility_connect_tunnel')).replace('%s', this.tunnelName);
+  }
+
   build() {
     Button(this.getButtonText())
       .fontSize(TYPOGRAPHY.body_lg.size)
@@ -42,6 +53,7 @@ export struct TunnelActionButton {
       .height(50)
       .padding({ left: 32, right: 32 })
       .borderRadius(RADIUS.full)
+      .accessibilityText(this.getAccessibilityText())
       .stateStyles({
         pressed: {
           .scale({ x: 0.97, y: 0.97 })

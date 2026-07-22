@@ -14,16 +14,21 @@ async function resolveHostToIPv4(host: string): Promise<string> {
   if (IPV4_PATTERN.test(host)) {
     return host;
   }
-  const addresses = await connection.getAddressesByName(host);
-  if (!addresses || addresses.length === 0) {
-    throw new Error('DNS returned no records for ' + host);
-  }
-  for (const a of addresses) {
-    if (a.address && !a.address.includes(':')) {
-      return a.address;
+  try {
+    const addresses = await connection.getAddressesByName(host);
+    if (!addresses || addresses.length === 0) {
+      throw new Error('DNS returned no records for ' + host);
     }
+    for (const address of addresses) {
+      if (address.address && !address.address.includes(':')) {
+        return address.address;
+      }
+    }
+    throw new Error('No IPv4 record for ' + host);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error('DNS lookup failed: ' + msg);
   }
-  throw new Error('No IPv4 record for ' + host);
 }
 
 const TAG = 'WireGuardVpnAbility';
@@ -49,6 +54,12 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
     super.onCreate(want);
     if (this.context) {
       this.vpnConnection = vpnExtension.createVpnConnection(this.context);
+      try {
+        configManager.init(this.context);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'ConfigManager init failed: %{public}s', msg);
+      }
       hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'VpnConnection created');
     } else {
       hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'Context is invalid in onCreate');
@@ -78,7 +89,6 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
     // 路径 B：从 prefs 读 active config id
     if (!wgConfig) {
       try {
-        configManager.init(this.context);
         wgConfig = configManager.getActiveConfig();
         if (wgConfig) {
           hilog.info(APP_CONSTANTS.DOMAIN, TAG,
@@ -149,7 +159,13 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
     hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'UDP socket created: %{public}d', socketFd);
 
     // 2. protect socket，避免流量回环
-    await this.vpnConnection!.protect(socketFd);
+    try {
+      await this.vpnConnection!.protect(socketFd);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.cleanupFailedStart();
+      throw new Error('Failed to protect VPN socket: ' + msg);
+    }
     hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'socket protected: %{public}d', socketFd);
 
     // 3. 构建 VpnConfig —— 不带 routes 字段，让系统按默认策略
@@ -159,7 +175,13 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
       vpnConfig.addresses.length, vpnConfig.routes?.length ?? 0, vpnConfig.mtu ?? 0);
 
     // 4. 创建 VPN 连接，获取 TUN fd
-    this.tunFd = await this.vpnConnection!.create(vpnConfig);
+    try {
+      this.tunFd = await this.vpnConnection!.create(vpnConfig);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.cleanupFailedStart();
+      throw new Error('Failed to create VPN connection: ' + msg);
+    }
     hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'VPN created, tunFd=%{public}d', this.tunFd);
 
     // 5. 启动 Native 层 WireGuard + 数据转发
@@ -175,8 +197,19 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
     const ret: number = wgNative.startVpn(this.tunFd, socketFd, nativeConfig);
     hilog.info(APP_CONSTANTS.DOMAIN, TAG, 'Native startVpn result=%{public}d', ret);
     if (ret < 0) {
+      this.cleanupFailedStart();
       throw new Error('Native startVpn failed: ' + ret);
     }
+  }
+
+  private cleanupFailedStart(): void {
+    try {
+      wgNative.stopVpn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      hilog.error(APP_CONSTANTS.DOMAIN, TAG, 'Native cleanup failed: %{public}s', msg);
+    }
+    this.destroyVpn();
   }
 
   onDestroy(): void {
@@ -233,6 +266,11 @@ export default class WireGuardVpnAbility extends VpnExtensionAbility {
 
   // 广播一次终态（disconnected / failed），让 UI 立即离开 connecting/connected
   private publishDisconnected(state: string): void {
+    if (this.activeConfigId) {
+      // The extension owns the terminal state. Clear persistence even when
+      // the UI process is not alive to receive the common event.
+      configManager.clearActiveConfigId(this.activeConfigId);
+    }
     const payload: string =
       '{"connected":false,"handshakeAgeSec":-1,"rxBytes":0,"txBytes":0,"state":"' + state + '"}';
     const params: Record<string, Object> = { 'configId': this.activeConfigId };

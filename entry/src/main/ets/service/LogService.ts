@@ -38,9 +38,11 @@ class LogService {
   }
 
   private sanitize(text: string): string {
-    // Redact private keys
-    let sanitized = text.replace(/PrivateKey\s*=\s*[A-Za-z0-9+/=]+/g, 'PrivateKey = [REDACTED]');
-    sanitized = sanitized.replace(/PresharedKey\s*=\s*[A-Za-z0-9+/=]+/g, 'PresharedKey = [REDACTED]');
+    // Key redaction is mandatory and is deliberately not controlled by a user setting.
+    let sanitized = text.replace(/PrivateKey\s*=\s*[A-Za-z0-9+/=]+/gi, 'PrivateKey = [REDACTED]');
+    sanitized = sanitized.replace(/PresharedKey\s*=\s*[A-Za-z0-9+/=]+/gi, 'PresharedKey = [REDACTED]');
+    sanitized = sanitized.replace(/"privateKey"\s*:\s*"[^"]*"/gi, '"privateKey":"[REDACTED]"');
+    sanitized = sanitized.replace(/"presharedKey"\s*:\s*"[^"]*"/gi, '"presharedKey":"[REDACTED]"');
     return sanitized;
   }
 }

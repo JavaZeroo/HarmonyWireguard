@@ -106,14 +106,26 @@ export class DialogHelper {
     let content: ComponentContent<DialogModel> | null = null;
     model.close = () => {
       if (content !== null) {
-        ctx.getPromptAction().closeCustomDialog(content as ComponentContent<Object>);
+        try {
+          ctx.getPromptAction().closeCustomDialog(content as ComponentContent<Object>);
+        } catch (err) {
+          console.error('DialogHelper: failed to close dialog');
+        }
       }
     };
     content = new ComponentContent(ctx, wrapBuilder(confirmDialogContent), model);
-    ctx.getPromptAction().openCustomDialog(content as ComponentContent<Object>, {
-      alignment: DialogAlignment.Center,
-      autoCancel: true,
-      isModal: true
-    });
+    try {
+      ctx.getPromptAction().openCustomDialog(content as ComponentContent<Object>, {
+        alignment: DialogAlignment.Center,
+        autoCancel: true,
+        isModal: true
+      }).catch((err: Error) => {
+        content = null;
+        console.error('DialogHelper: failed to open dialog: ' + err.message);
+      });
+    } catch (err) {
+      content = null;
+      console.error('DialogHelper: failed to open dialog');
+    }
   }
 }

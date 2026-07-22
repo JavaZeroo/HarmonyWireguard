@@ -88,19 +88,12 @@ static napi_value StartVpn(napi_env env, napi_callback_info info) {
         uint8_t presharedKey[32] = {0};
         size_t keyLen = 32;
 
-        WG_LOGI("Key strings received: priv.len=%{public}zu peer.len=%{public}zu psk.len=%{public}zu",
-                privateKeyB64.size(), peerPubKeyB64.size(), presharedKeyB64.size());
-
         bool priv_ok = Base64Decode(privateKeyB64.c_str(), privateKey, &keyLen);
-        WG_LOGI("priv Base64Decode: ok=%{public}d len=%{public}zu first4=%{public}02x%{public}02x%{public}02x%{public}02x",
-                priv_ok, keyLen, privateKey[0], privateKey[1], privateKey[2], privateKey[3]);
+        WG_LOGI("Private key decoded: ok=%{public}d len=%{public}zu", priv_ok, keyLen);
 
         keyLen = 32;
         bool peer_ok = Base64Decode(peerPubKeyB64.c_str(), peerPubKey, &keyLen);
-        WG_LOGI("peer Base64Decode: ok=%{public}d len=%{public}zu first4=%{public}02x%{public}02x%{public}02x%{public}02x last4=%{public}02x%{public}02x%{public}02x%{public}02x",
-                peer_ok, keyLen,
-                peerPubKey[0], peerPubKey[1], peerPubKey[2], peerPubKey[3],
-                peerPubKey[28], peerPubKey[29], peerPubKey[30], peerPubKey[31]);
+        WG_LOGI("Peer key decoded: ok=%{public}d len=%{public}zu", peer_ok, keyLen);
 
         if (!priv_ok || !peer_ok || keyLen != 32) {
             WG_LOGE("KEY DECODE FAILED — handshake will be invalid. priv_ok=%{public}d peer_ok=%{public}d peer_len=%{public}zu",

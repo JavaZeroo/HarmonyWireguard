@@ -24,13 +24,6 @@ export struct RuntimeLogList {
 
   build() {
     Column({ space: SPACING.xs }) {
-      Text(getString($r('app.string.section_logs')))
-        .fontSize(TYPOGRAPHY.title_sm.size)
-        .fontWeight(TYPOGRAPHY.title_sm.weight)
-        .fontColor($r('app.color.text_primary'))
-        .width('100%')
-        .margin({ bottom: SPACING.xs })
-
       if (this.logs.length === 0) {
         Text(getString($r('app.string.hint_waiting_data')))
           .fontSize(TYPOGRAPHY.caption.size)

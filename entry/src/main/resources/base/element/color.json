@@ -13,7 +13,7 @@
     { "name": "glass_bar", "value": "#CCFFFFFF" },
     { "name": "text_primary", "value": "#E6000000" },
     { "name": "text_secondary", "value": "#99000000" },
-    { "name": "text_tertiary", "value": "#66000000" },
+    { "name": "text_tertiary", "value": "#8A000000" },
     { "name": "divider", "value": "#1F000000" },
     { "name": "success_bg", "value": "#E8F8F3" },
     { "name": "warning_bg", "value": "#FFF3E0" },

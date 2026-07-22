@@ -60,6 +60,9 @@ export function validateDns(dns: string): boolean {
   if (!dns || dns.length === 0) return true;
   const entries = dns.split(',').map(s => s.trim()).filter(s => s.length > 0);
   return entries.every(entry => {
+    if (entry.includes(':')) {
+      return validateCidr(entry + '/128');
+    }
     if (entry.includes('.')) {
       const octets = entry.split('.');
       if (octets.length !== 4) return false;
@@ -68,7 +71,7 @@ export function validateDns(dns: string): boolean {
         return !isNaN(n) && n >= 0 && n <= 255;
       });
     }
-    return true;
+    return false;
   });
 }
 

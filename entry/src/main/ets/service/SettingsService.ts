@@ -5,10 +5,25 @@ import type { common } from '@kit.AbilityKit';
 // 深色模式：跟随系统 / 浅色 / 深色
 export type ThemeMode = 'system' | 'light' | 'dark';
 
+export type BoolSettingKey =
+  'autoConnect' |
+  'reconnectOnNetworkChange' |
+  'retryOnFailure' |
+  'allowLanAccess' |
+  'blockIpv6Leak' |
+  'defaultMtuAuto' |
+  'dnsLeakDetection' |
+  'keyRevealConfirm' |
+  'reportCopyConfirm' |
+  'autoClearClipboard' |
+  'logSanitization' |
+  'compactMode' |
+  'statusBarTraffic';
+
 const STORE_NAME = 'app_settings';
 
 // 所有布尔开关的默认值（与旧 SettingsPage @State 默认保持一致）
-const BOOL_DEFAULTS: Record<string, boolean> = {
+const BOOL_DEFAULTS: Record<BoolSettingKey, boolean> = {
   autoConnect: false,
   reconnectOnNetworkChange: true,
   retryOnFailure: true,
@@ -17,7 +32,7 @@ const BOOL_DEFAULTS: Record<string, boolean> = {
   defaultMtuAuto: true,
   dnsLeakDetection: false,
   keyRevealConfirm: true,
-  exportConfirm: true,
+  reportCopyConfirm: true,
   autoClearClipboard: true,
   logSanitization: true,
   compactMode: false,
@@ -25,17 +40,42 @@ const BOOL_DEFAULTS: Record<string, boolean> = {
 };
 
 // 显式 key 列表（ArkTS 不支持 Object.keys 遍历 Record）
-const BOOL_KEYS: string[] = [
+const BOOL_KEYS: BoolSettingKey[] = [
   'autoConnect', 'reconnectOnNetworkChange', 'retryOnFailure',
   'allowLanAccess', 'blockIpv6Leak', 'defaultMtuAuto', 'dnsLeakDetection',
-  'keyRevealConfirm', 'exportConfirm', 'autoClearClipboard', 'logSanitization',
+  'keyRevealConfirm', 'reportCopyConfirm', 'autoClearClipboard', 'logSanitization',
   'compactMode', 'statusBarTraffic'
 ];
+
+function createDefaultBools(): Record<BoolSettingKey, boolean> {
+  return {
+    autoConnect: BOOL_DEFAULTS.autoConnect,
+    reconnectOnNetworkChange: BOOL_DEFAULTS.reconnectOnNetworkChange,
+    retryOnFailure: BOOL_DEFAULTS.retryOnFailure,
+    allowLanAccess: BOOL_DEFAULTS.allowLanAccess,
+    blockIpv6Leak: BOOL_DEFAULTS.blockIpv6Leak,
+    defaultMtuAuto: BOOL_DEFAULTS.defaultMtuAuto,
+    dnsLeakDetection: BOOL_DEFAULTS.dnsLeakDetection,
+    keyRevealConfirm: BOOL_DEFAULTS.keyRevealConfirm,
+    reportCopyConfirm: BOOL_DEFAULTS.reportCopyConfirm,
+    autoClearClipboard: BOOL_DEFAULTS.autoClearClipboard,
+    logSanitization: BOOL_DEFAULTS.logSanitization,
+    compactMode: BOOL_DEFAULTS.compactMode,
+    statusBarTraffic: BOOL_DEFAULTS.statusBarTraffic
+  };
+}
+
+function normalizeThemeMode(value: preferences.ValueType): ThemeMode {
+  if (value === 'light' || value === 'dark' || value === 'system') {
+    return value;
+  }
+  return 'system';
+}
 
 class SettingsService {
   private store: preferences.Preferences | null = null;
   private appCtx: common.ApplicationContext | null = null;
-  private bools: Record<string, boolean> = {};
+  private bools: Record<BoolSettingKey, boolean> = createDefaultBools();
   private theme: ThemeMode = 'system';
 
   init(ctx: common.UIAbilityContext): void {
@@ -48,37 +88,38 @@ class SettingsService {
       // 载入所有布尔项
       for (let i = 0; i < BOOL_KEYS.length; i++) {
         const k = BOOL_KEYS[i];
-        const def = BOOL_DEFAULTS[k] ?? false;
-        this.bools[k] = this.store.getSync(k, def) as boolean;
+        const def = BOOL_DEFAULTS[k];
+        const value = this.store.getSync(k, def);
+        this.bools[k] = typeof value === 'boolean' ? value : def;
       }
       // 载入主题
-      this.theme = this.store.getSync('themeMode', 'system') as ThemeMode;
+      this.theme = normalizeThemeMode(this.store.getSync('themeMode', 'system'));
       this.applyTheme();
     } catch (e) {
       // 兜底：用默认值
-      for (let i = 0; i < BOOL_KEYS.length; i++) {
-        this.bools[BOOL_KEYS[i]] = BOOL_DEFAULTS[BOOL_KEYS[i]] ?? false;
-      }
+      this.bools = createDefaultBools();
+      this.theme = 'system';
+      this.applyTheme();
     }
   }
 
-  getBool(key: string): boolean {
-    const v = this.bools[key];
-    if (v !== undefined) {
-      return v;
-    }
-    return BOOL_DEFAULTS[key] ?? false;
+  getBool(key: BoolSettingKey): boolean {
+    return this.bools[key];
   }
 
-  setBool(key: string, value: boolean): void {
+  setBool(key: BoolSettingKey, value: boolean): boolean {
+    if (!this.store) {
+      return false;
+    }
+    const previous = this.bools[key];
     this.bools[key] = value;
-    if (this.store) {
-      try {
-        this.store.putSync(key, value);
-        this.store.flush();
-      } catch (e) {
-        // ignore persist error
-      }
+    try {
+      this.store.putSync(key, value);
+      this.store.flushSync();
+      return true;
+    } catch (e) {
+      this.bools[key] = previous;
+      return false;
     }
   }
 
@@ -86,17 +127,23 @@ class SettingsService {
     return this.theme;
   }
 
-  setTheme(mode: ThemeMode): void {
-    this.theme = mode;
-    if (this.store) {
-      try {
-        this.store.putSync('themeMode', mode);
-        this.store.flush();
-      } catch (e) {
-        // ignore
-      }
+  setTheme(mode: ThemeMode): boolean {
+    if (!this.store) {
+      return false;
     }
-    this.applyTheme();
+    const normalizedMode = normalizeThemeMode(mode);
+    const previous = this.theme;
+    this.theme = normalizedMode;
+    try {
+      this.store.putSync('themeMode', normalizedMode);
+      this.store.flushSync();
+      this.applyTheme();
+      return true;
+    } catch (e) {
+      this.theme = previous;
+      this.applyTheme();
+      return false;
+    }
   }
 
   private applyTheme(): void {
